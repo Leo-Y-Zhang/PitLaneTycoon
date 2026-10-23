@@ -17,15 +17,25 @@ jobs:
           cd "$RUNNER_TEMP"
           curl -sSfL -o luau.zip https://github.com/luau-lang/luau/releases/download/0.743/luau-ubuntu.zip
           curl -sSfL -o rojo.zip https://github.com/rojo-rbx/rojo/releases/download/v7.7.1/rojo-7.7.1-linux-x86_64.zip
+          curl -sSfL -o lsp.zip https://github.com/JohnnyMorganz/luau-lsp/releases/download/1.70.1/luau-lsp-linux-x86_64.zip
+          curl -sSfL -o globalTypes.d.luau https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/7a10f6d2dc6067934c66f9e3ad6cb4095594ac62/scripts/globalTypes.d.luau
           printf '%s  %s\n' \
             99d45afb4afaee00ba631c526c8e8c76c67b60f6f119953ce6409be6d6953663 luau.zip \
-            00feb4fa0829a1dd72b49df2639da519a352bfe13cadcd83969e2ba2bb5693c4 rojo.zip | sha256sum -c -
-          mkdir -p bin && unzip -oq luau.zip -d bin && unzip -oq rojo.zip -d bin && chmod +x bin/*
+            00feb4fa0829a1dd72b49df2639da519a352bfe13cadcd83969e2ba2bb5693c4 rojo.zip \
+            1a2ea1ae4f98f8946cefd970a4b54853e11ab4775e6932faa7f60cf920346567 lsp.zip \
+            71698e2454aacef1a144a498ffc1d7ea80654b9593025344672bc9106997bf6a globalTypes.d.luau | sha256sum -c -
+          mkdir -p bin && unzip -oq luau.zip -d bin && unzip -oq rojo.zip -d bin && unzip -oq lsp.zip -d bin && chmod +x bin/*
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Every Luau file compiles
         run: find src -name '*.luau' -print0 | xargs -0 -n1 luau-compile > /dev/null
       - name: The place file builds
         run: rojo build default.project.json -o "$RUNNER_TEMP/PitLaneTycoon.rbxlx"
+      - name: Type-check against the Roblox API
+        # The nearest thing to a play-test outside Studio: wrong property names, wrong
+        # argument types and bad requires fail here.
+        run: |
+          rojo sourcemap default.project.json -o sourcemap.json
+          luau-lsp analyze --platform=roblox --definitions="$RUNNER_TEMP/globalTypes.d.luau" --sourcemap=sourcemap.json src
   gitleaks:
     runs-on: ubuntu-latest
     steps:
