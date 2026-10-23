@@ -9,22 +9,29 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Install Luau and Rojo
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install Luau and Rojo (pinned versions, checksums verified)
+        # Tools go to the runner's temp directory, outside the checkout, so nothing in
+        # the repository (or a pull request) can stand in for them.
         run: |
-          curl -sSL -o luau.zip https://github.com/luau-lang/luau/releases/download/0.743/luau-ubuntu.zip
-          curl -sSL -o rojo.zip https://github.com/rojo-rbx/rojo/releases/download/v7.7.1/rojo-7.7.1-linux-x86_64.zip
-          unzip -q luau.zip -d tools && unzip -q rojo.zip -d tools && chmod +x tools/*
+          cd "$RUNNER_TEMP"
+          curl -sSfL -o luau.zip https://github.com/luau-lang/luau/releases/download/0.743/luau-ubuntu.zip
+          curl -sSfL -o rojo.zip https://github.com/rojo-rbx/rojo/releases/download/v7.7.1/rojo-7.7.1-linux-x86_64.zip
+          printf '%s  %s\n' \
+            99d45afb4afaee00ba631c526c8e8c76c67b60f6f119953ce6409be6d6953663 luau.zip \
+            00feb4fa0829a1dd72b49df2639da519a352bfe13cadcd83969e2ba2bb5693c4 rojo.zip | sha256sum -c -
+          mkdir -p bin && unzip -oq luau.zip -d bin && unzip -oq rojo.zip -d bin && chmod +x bin/*
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Every Luau file compiles
-        run: find src -name '*.luau' -print0 | xargs -0 -n1 tools/luau-compile > /dev/null
+        run: find src -name '*.luau' -print0 | xargs -0 -n1 luau-compile > /dev/null
       - name: The place file builds
-        run: tools/rojo build default.project.json -o PitLaneTycoon.rbxlx
+        run: rojo build default.project.json -o "$RUNNER_TEMP/PitLaneTycoon.rbxlx"
   gitleaks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
