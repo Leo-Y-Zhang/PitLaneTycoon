@@ -1,0 +1,575 @@
+-- Pit Lane Tycoon server: plots, the production line, money, saving and purchases.
+-- The whole map is built here from code, so the place file needs nothing made by hand.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local DataStoreService = game:GetService("DataStoreService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local Debris = game:GetService("Debris")
+local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+
+local store = nil
+do
+	local ok, result = pcall(function()
+		return DataStoreService:GetDataStore(Config.DataStoreName)
+	end)
+	if ok then
+		store = result
+	else
+		warn("[PitLane] DataStore unavailable (publish the place and enable Studio API access): " .. tostring(result))
+	end
+end
+
+-- remotes ---------------------------------------------------------------------------
+local remotes = Instance.new("Folder")
+remotes.Name = "Remotes"
+remotes.Parent = ReplicatedStorage
+local function remote(name: string): RemoteEvent
+	local r = Instance.new("RemoteEvent")
+	r.Name = name
+	r.Parent = remotes
+	return r
+end
+local notify = remote("Notify")
+local newSeason = remote("NewSeason")
+
+local ITEM_BY_KEY = {}
+for i, item in Config.Items do
+	ITEM_BY_KEY[item.key] = i
+end
+
+-- small helpers ---------------------------------------------------------------------
+local function part(props: { [string]: any }): Part
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	for k, v in props do
+		(p :: any)[k] = v
+	end
+	return p
+end
+
+local function label(parent: Instance, text: string, height: number): TextLabel
+	local gui = Instance.new("BillboardGui")
+	gui.Size = UDim2.fromOffset(220, 60)
+	gui.StudsOffset = Vector3.new(0, height, 0)
+	gui.AlwaysOnTop = false
+	gui.MaxDistance = 90
+	gui.Parent = parent
+	local t = Instance.new("TextLabel")
+	t.Size = UDim2.fromScale(1, 1)
+	t.BackgroundTransparency = 1
+	t.Font = Enum.Font.GothamBold
+	t.TextScaled = true
+	t.TextColor3 = Color3.new(1, 1, 1)
+	t.TextStrokeTransparency = 0.4
+	t.Text = text
+	t.Parent = gui
+	return t
+end
+
+local function money(n: number): string
+	local units = { "", "K", "M", "B", "T", "Qa" }
+	local i = 1
+	while math.abs(n) >= 1000 and i < #units do
+		n /= 1000
+		i += 1
+	end
+	if i == 1 then
+		return "$" .. tostring(math.floor(n))
+	end
+	return string.format("$%.1f%s", n, units[i])
+end
+
+-- player state ----------------------------------------------------------------------
+type Data = { cash: number, bought: { [string]: boolean }, season: number, lastDaily: number, streak: number, receipts: { [string]: boolean } }
+type State = { data: Data, plot: any?, pending: number, canSave: boolean, passes: { [string]: boolean }, dirty: boolean }
+local states: { [Player]: State } = {}
+
+local function freshData(): Data
+	return { cash = 0, bought = {}, season = 0, lastDaily = 0, streak = 0, receipts = {} }
+end
+
+local function multiplier(st: State): number
+	local m = 1 + st.data.season * Config.SeasonBonus
+	if st.passes.DoubleCash then m *= 2 end
+	if st.passes.VIP then m *= 1.25 end
+	return m
+end
+
+local function incomePerMinute(st: State): number
+	local perMin, upgrade = 0, 1
+	for _, item in Config.Items do
+		if st.data.bought[item.key] then
+			if item.kind == "press" then
+				perMin += (item.value :: number) / (item.every :: number) * 60
+			elseif item.kind == "upgrade" then
+				upgrade *= item.mult :: number
+			end
+		end
+	end
+	return perMin * upgrade * multiplier(st)
+end
+
+local function publish(player: Player)
+	local st = states[player]
+	if not st then return end
+	local ls = player:FindFirstChild("leaderstats")
+	if ls then
+		(ls:FindFirstChild("Cash") :: NumberValue).Value = math.floor(st.data.cash);
+		(ls:FindFirstChild("Seasons") :: IntValue).Value = st.data.season
+	end
+	player:SetAttribute("Pending", math.floor(st.pending))
+	player:SetAttribute("IncomePerMin", math.floor(incomePerMinute(st)))
+	player:SetAttribute("Season", st.data.season)
+	player:SetAttribute("SeasonCost", Config.SeasonCost(st.data.season))
+	player:SetAttribute("HasTrophy", st.data.bought.trophy == true)
+	for name in Config.Passes do
+		player:SetAttribute("Owns" .. name, st.passes[name] == true)
+	end
+	if st.plot then
+		st.plot.pendingLabel.Text = st.passes.AutoCollect and "Auto-collect on" or ("Collect " .. money(st.pending))
+	end
+end
+
+local function addCash(player: Player, amount: number)
+	local st = states[player]
+	if not st then return end
+	st.data.cash += amount
+	st.dirty = true
+	publish(player)
+end
+
+-- plots -----------------------------------------------------------------------------
+local plots = {}
+local plotsFolder = Instance.new("Folder")
+plotsFolder.Name = "Plots"
+plotsFolder.Parent = workspace
+
+local function at(plot, x: number, y: number, z: number): CFrame
+	return plot.cf * CFrame.new(x, y, z)
+end
+
+local function nextItemIndex(st: State): number?
+	for i, item in Config.Items do
+		if not st.data.bought[item.key] then
+			return i
+		end
+	end
+	return nil
+end
+
+local function refreshPads(player: Player)
+	local st = states[player]
+	if not st or not st.plot then return end
+	local nextIndex = nextItemIndex(st)
+	for i, pad in st.plot.pads do
+		local show = i == nextIndex
+		pad.Transparency = show and 0 or 1
+		pad.CanTouch = show
+		pad:FindFirstChildOfClass("BillboardGui").Enabled = show
+	end
+end
+
+local function spawnPress(player: Player, item)
+	local st = states[player]
+	local plot = st.plot
+	local body = part({
+		Name = item.key, Size = Vector3.new(3, 3, 3), Color = Color3.fromRGB(70, 74, 82),
+		Material = Enum.Material.Metal, CFrame = at(plot, item.x, 7, 0), Parent = plot.items,
+	})
+	label(body, item.name, 3)
+	task.spawn(function()
+		while body.Parent and states[player] == st and st.plot == plot do
+			local drop = Instance.new("Part")
+			drop.Size = Vector3.new(1.2, 1.2, 1.2)
+			drop.Color = Color3.fromRGB(196, 202, 210)
+			drop.Material = Enum.Material.SmoothPlastic
+			drop.CFrame = at(plot, item.x, 4.6, 0)
+			drop:SetAttribute("Value", item.value)
+			drop.Parent = plot.drops
+			Debris:AddItem(drop, Config.PartLifetime)
+			task.wait(item.every)
+		end
+	end)
+end
+
+local function spawnUpgrade(player: Player, item)
+	local plot = states[player].plot
+	local gate = part({
+		Name = item.key, Size = Vector3.new(1.5, 6, 7.5), Color = Color3.fromRGB(255, 196, 0),
+		Material = Enum.Material.Neon, Transparency = 0.55, CanCollide = false,
+		CFrame = at(plot, item.x, 4, 0), Parent = plot.items,
+	})
+	label(gate, item.name, 4)
+	local tag = "U_" .. item.key
+	gate.Touched:Connect(function(hit)
+		if hit.Parent == plot.drops and not hit:GetAttribute(tag) then
+			hit:SetAttribute(tag, true)
+			hit:SetAttribute("Value", (hit:GetAttribute("Value") or 0) * item.mult)
+			hit.Color = Color3.fromRGB(255, 120, 40)
+		end
+	end)
+end
+
+local function conveyorSpeed(st: State): number
+	local speed = Config.BaseConveyorSpeed
+	for _, item in Config.Items do
+		if item.kind == "speed" and st.data.bought[item.key] then
+			speed = math.max(speed, item.speed :: number)
+		end
+	end
+	return speed
+end
+
+local function build(player: Player, item)
+	local st = states[player]
+	if item.kind == "press" then
+		spawnPress(player, item)
+	elseif item.kind == "upgrade" then
+		spawnUpgrade(player, item)
+	elseif item.kind == "speed" then
+		st.plot.conveyor.AssemblyLinearVelocity = st.plot.cf.RightVector * conveyorSpeed(st)
+	elseif item.kind == "trophy" then
+		local cup = part({
+			Name = "Trophy", Size = Vector3.new(3, 5, 3), Color = Color3.fromRGB(255, 205, 60),
+			Material = Enum.Material.Foil, CFrame = at(st.plot, -27, 3, 16), Parent = st.plot.items,
+		})
+		label(cup, "New season ready", 4)
+	end
+end
+
+local function rebuildPlot(player: Player)
+	local st = states[player]
+	local plot = st.plot
+	plot.items:ClearAllChildren()
+	plot.drops:ClearAllChildren()
+	plot.conveyor.AssemblyLinearVelocity = plot.cf.RightVector * conveyorSpeed(st)
+	for _, item in Config.Items do
+		if st.data.bought[item.key] then
+			build(player, item)
+		end
+	end
+	refreshPads(player)
+end
+
+local function tryBuy(player: Player, index: number)
+	local st = states[player]
+	if not st or nextItemIndex(st) ~= index then return end
+	local item = Config.Items[index]
+	if st.data.cash < item.cost then
+		notify:FireClient(player, "Need " .. money(item.cost - st.data.cash) .. " more for " .. item.name)
+		return
+	end
+	st.data.cash -= item.cost
+	st.data.bought[item.key] = true
+	st.dirty = true
+	build(player, item)
+	refreshPads(player)
+	publish(player)
+	notify:FireClient(player, "Bought " .. item.name)
+end
+
+local function bankPending(player: Player)
+	local st = states[player]
+	if st and st.pending > 0 then
+		local amount = st.pending
+		st.pending = 0
+		addCash(player, amount)
+	end
+end
+
+local function makePlot(index: number)
+	local angle = (index - 1) / Config.PlotCount * math.pi * 2
+	local centre = Vector3.new(math.cos(angle), 0, math.sin(angle)) * Config.PlotRadius
+	local plot = { index = index, owner = nil :: Player?, pads = {} }
+	plot.cf = CFrame.lookAt(centre, Vector3.new(0, 0, 0)) -- local -Z faces the spawn
+	local model = Instance.new("Model")
+	model.Name = "Plot" .. index
+	model.Parent = plotsFolder
+	plot.model = model
+	part({ Name = "Base", Size = Vector3.new(64, 1, 52), CFrame = at(plot, 0, -0.5, 0),
+		Color = Color3.fromRGB(46, 52, 58), Material = Enum.Material.Concrete, Parent = model })
+	local sign = part({ Name = "Sign", Size = Vector3.new(14, 4, 1), CFrame = at(plot, 0, 3, -25.5),
+		Color = Color3.fromRGB(20, 24, 28), Parent = model })
+	plot.signLabel = label(sign, "Free garage", 3)
+	plot.conveyor = part({ Name = "Conveyor", Size = Vector3.new(48, 1, 6), CFrame = at(plot, 0, 1, 0),
+		Color = Color3.fromRGB(30, 30, 30), Material = Enum.Material.DiamondPlate, Parent = model })
+	local collector = part({ Name = "Scrutineering", Size = Vector3.new(4, 3, 8), CFrame = at(plot, 26, 1.5, 0),
+		Color = Color3.fromRGB(0, 170, 110), Material = Enum.Material.Neon, Parent = model })
+	label(collector, "Scrutineering", 3)
+	local collectPad = part({ Name = "CollectPad", Size = Vector3.new(6, 0.4, 6), CFrame = at(plot, 26, 0.2, 12),
+		Color = Color3.fromRGB(0, 120, 255), Material = Enum.Material.Neon, Parent = model })
+	plot.pendingLabel = label(collectPad, "Collect $0", 3)
+	plot.items = Instance.new("Folder")
+	plot.items.Name = "Items"
+	plot.items.Parent = model
+	plot.drops = Instance.new("Folder")
+	plot.drops.Name = "Drops"
+	plot.drops.Parent = model
+
+	collector.Touched:Connect(function(hit)
+		if hit.Parent ~= plot.drops or not plot.owner then return end
+		local st = states[plot.owner]
+		local value = (hit:GetAttribute("Value") or 0) * (st and multiplier(st) or 1)
+		hit:Destroy()
+		if not st then return end
+		if st.passes.AutoCollect then
+			addCash(plot.owner, value)
+		else
+			st.pending += value
+			publish(plot.owner)
+		end
+	end)
+	local function ownerOf(hit: BasePart): Player?
+		local player = Players:GetPlayerFromCharacter(hit.Parent)
+		if player and player == plot.owner then return player end
+		return nil
+	end
+	collectPad.Touched:Connect(function(hit)
+		local player = ownerOf(hit)
+		if player then bankPending(player) end
+	end)
+	for i, item in Config.Items do
+		local pad = part({ Name = "Buy_" .. item.key, Size = Vector3.new(4, 0.4, 4),
+			CFrame = at(plot, -27 + (i - 1) * 5.4, 0.2, -18), Color = Color3.fromRGB(255, 70, 70),
+			Material = Enum.Material.Neon, Transparency = 1, CanTouch = false, Parent = model })
+		local text = label(pad, item.name .. "\n" .. (item.cost == 0 and "Free" or money(item.cost)), 3)
+		local board = text.Parent :: BillboardGui
+		board.Enabled = false
+		local busy = false
+		pad.Touched:Connect(function(hit)
+			local player = ownerOf(hit)
+			if player and not busy then
+				busy = true
+				tryBuy(player, i)
+				task.wait(0.4)
+				busy = false
+			end
+		end)
+		plot.pads[i] = pad
+	end
+	return plot
+end
+
+for i = 1, Config.PlotCount do
+	plots[i] = makePlot(i)
+end
+local spawnPad = Instance.new("SpawnLocation")
+spawnPad.Size = Vector3.new(12, 1, 12)
+spawnPad.Anchored = true
+spawnPad.Neutral = true
+spawnPad.Color = Color3.fromRGB(230, 230, 235)
+spawnPad.CFrame = CFrame.new(0, 0.5, 0)
+spawnPad.Parent = workspace
+-- the paddock: one ground plane under the spawn and every garage
+part({ Name = "Paddock", Size = Vector3.new(2 * Config.PlotRadius + 140, 1, 2 * Config.PlotRadius + 140),
+	CFrame = CFrame.new(0, -0.6, 0), Color = Color3.fromRGB(84, 92, 98), Material = Enum.Material.Asphalt, Parent = workspace })
+
+-- saving ----------------------------------------------------------------------------
+local function save(player: Player)
+	local st = states[player]
+	if not st or not st.canSave or not store then return end
+	local snapshot = table.clone(st.data)
+	local ok, err = pcall(function()
+		store:UpdateAsync("u_" .. player.UserId, function()
+			return snapshot
+		end)
+	end)
+	if ok then
+		st.dirty = false
+	else
+		warn("[PitLane] save failed for " .. player.Name .. ": " .. tostring(err))
+	end
+end
+
+local function load(player: Player): (Data, boolean)
+	if not store then
+		return freshData(), false
+	end
+	local ok, result = pcall(function()
+		return store:GetAsync("u_" .. player.UserId)
+	end)
+	if not ok then
+		-- never overwrite a save we could not read
+		return freshData(), false
+	end
+	local data = freshData()
+	if type(result) == "table" then
+		for k, v in result do
+			(data :: any)[k] = v
+		end
+	end
+	return data, true
+end
+
+-- passes ----------------------------------------------------------------------------
+local function checkPasses(player: Player, st: State)
+	for name, id in Config.Passes do
+		if id ~= 0 then
+			local ok, owns = pcall(function()
+				return MarketplaceService:UserOwnsGamePassAsync(player.UserId, id)
+			end)
+			st.passes[name] = ok and owns or false
+		end
+	end
+end
+
+MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
+	local st = states[player]
+	if not (purchased and st) then return end
+	for name, id in Config.Passes do
+		if id == passId then
+			st.passes[name] = true
+			if name == "AutoCollect" then bankPending(player) end
+			notify:FireClient(player, "Thanks! Pass active.")
+		end
+	end
+	publish(player)
+end)
+
+MarketplaceService.ProcessReceipt = function(receipt)
+	local player = Players:GetPlayerByUserId(receipt.PlayerId)
+	local st = player and states[player]
+	if not (player and st) then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if st.data.receipts[receipt.PurchaseId] then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+	for _, product in Config.Products do
+		if product.id ~= 0 and product.id == receipt.ProductId then
+			local amount = math.max(product.floor, incomePerMinute(st) * product.minutes)
+			st.data.receipts[receipt.PurchaseId] = true
+			addCash(player, amount)
+			save(player)
+			notify:FireClient(player, product.name .. ": +" .. money(amount))
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+		end
+	end
+	return Enum.ProductPurchaseDecision.NotProcessedYet
+end
+
+-- seasons and daily rewards ---------------------------------------------------------
+newSeason.OnServerEvent:Connect(function(player)
+	local st = states[player]
+	if not st or not st.data.bought.trophy then return end
+	local cost = Config.SeasonCost(st.data.season)
+	if st.data.cash < cost then
+		notify:FireClient(player, "A new season needs " .. money(cost))
+		return
+	end
+	st.data.season += 1
+	st.data.cash = 0
+	st.data.bought = { [Config.Items[1].key] = true }
+	st.pending = 0
+	st.dirty = true
+	rebuildPlot(player)
+	publish(player)
+	save(player)
+	notify:FireClient(player, ("Season %d! Earnings now x%.1f"):format(st.data.season + 1, multiplier(st)))
+end)
+
+local function dailyReward(player: Player, st: State)
+	local now = os.time()
+	local since = (now - st.data.lastDaily) / 3600
+	if since < Config.DailyCooldownHours then return end
+	st.data.streak = (since <= Config.StreakBreakHours) and st.data.streak + 1 or 1
+	st.data.lastDaily = now
+	local reward = Config.DailyRewards[math.min(st.data.streak, #Config.DailyRewards)] * multiplier(st)
+	addCash(player, reward)
+	notify:FireClient(player, ("Day %d streak: +%s"):format(st.data.streak, money(reward)))
+end
+
+-- joining and leaving ---------------------------------------------------------------
+local function assignPlot(player: Player)
+	for _, plot in plots do
+		if not plot.owner then
+			plot.owner = player
+			plot.signLabel.Text = player.DisplayName .. "'s garage"
+			return plot
+		end
+	end
+	return nil
+end
+
+Players.PlayerAdded:Connect(function(player)
+	local ls = Instance.new("Folder")
+	ls.Name = "leaderstats"
+	local cash = Instance.new("NumberValue")
+	cash.Name = "Cash"
+	cash.Parent = ls
+	local seasons = Instance.new("IntValue")
+	seasons.Name = "Seasons"
+	seasons.Parent = ls
+	ls.Parent = player
+
+	local data, canSave = load(player)
+	if not player.Parent then return end
+	local st: State = { data = data, plot = nil, pending = 0, canSave = canSave, passes = {}, dirty = false }
+	states[player] = st
+	checkPasses(player, st)
+	st.data.bought[Config.Items[1].key] = true -- the first press is free
+	st.plot = assignPlot(player)
+	if not st.plot then
+		notify:FireClient(player, "This server is full of teams. Try another server.")
+		return
+	end
+	rebuildPlot(player)
+	publish(player)
+	if not canSave and store then
+		notify:FireClient(player, "Saving is unavailable right now; progress this visit may not save.")
+	end
+	dailyReward(player, st)
+
+	local function toPlot(character: Model)
+		task.defer(function()
+			if st.plot then
+				character:PivotTo(at(st.plot, 0, 4, -22))
+			end
+		end)
+	end
+	player.CharacterAdded:Connect(toPlot)
+	if player.Character then toPlot(player.Character) end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	local st = states[player]
+	if not st then return end
+	save(player)
+	if st.plot then
+		st.plot.owner = nil
+		st.plot.signLabel.Text = "Free garage"
+		st.plot.pendingLabel.Text = "Collect $0"
+		st.plot.items:ClearAllChildren()
+		st.plot.drops:ClearAllChildren()
+		for _, pad in st.plot.pads do
+			pad.Transparency = 1
+			pad.CanTouch = false
+			pad:FindFirstChildOfClass("BillboardGui").Enabled = false
+		end
+	end
+	states[player] = nil
+end)
+
+game:BindToClose(function()
+	if RunService:IsStudio() and not store then return end
+	for player in states do
+		task.spawn(save, player)
+	end
+	task.wait(3)
+end)
+
+task.spawn(function()
+	while true do
+		task.wait(Config.AutosaveSeconds)
+		for player, st in states do
+			if st.dirty then
+				task.spawn(save, player)
+			end
+		end
+	end
+end)

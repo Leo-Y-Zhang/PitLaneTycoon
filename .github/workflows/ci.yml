@@ -1,0 +1,30 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Luau and Rojo
+        run: |
+          curl -sSL -o luau.zip https://github.com/luau-lang/luau/releases/download/0.743/luau-ubuntu.zip
+          curl -sSL -o rojo.zip https://github.com/rojo-rbx/rojo/releases/download/v7.7.1/rojo-7.7.1-linux-x86_64.zip
+          unzip -q luau.zip -d tools && unzip -q rojo.zip -d tools && chmod +x tools/*
+      - name: Every Luau file compiles
+        run: find src -name '*.luau' -print0 | xargs -0 -n1 tools/luau-compile > /dev/null
+      - name: The place file builds
+        run: tools/rojo build default.project.json -o PitLaneTycoon.rbxlx
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
