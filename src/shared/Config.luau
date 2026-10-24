@@ -62,6 +62,22 @@ Config.DailyRewards = { 100, 250, 500, 1000, 2000, 4000, 8000 }
 Config.DailyCooldownHours = 20
 Config.StreakBreakHours = 48
 
+-- Friends boost: each friend in the same server adds +10% (up to 5), so players bring friends.
+Config.FriendBoost = 0.1
+Config.FriendBoostMax = 5
+
+-- Offline earnings: a share of the income rate at the last save, for up to capHours away.
+Config.Offline = { share = 0.25, capHours = 8, minMinutes = 5 }
+
+-- Happy hour: 2x earnings at the same time every weekend, so players gather (UTC; os.date
+-- wday 1 = Sunday, 7 = Saturday). 18:00 UTC is 19:00 in UK summer time.
+Config.HappyHour = { days = { 7, 1 }, startHourUtc = 18, hours = 1, mult = 2 }
+
+-- Leaderboard of factory earnings across all seasons (bought cash and rewards don't count).
+Config.LeaderboardName = "PitLaneTycoon_Earned_v1"
+Config.LeaderboardSize = 10
+Config.LeaderboardRefreshSeconds = 120
+
 Config.AutosaveSeconds = 60
 Config.DataStoreName = "PitLaneTycoon_v1"
 Config.PlotCount = 6
