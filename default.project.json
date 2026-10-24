@@ -17,7 +17,8 @@
       "$properties": {
         "ClockTime": 14.5,
         "Brightness": 2.5,
-        "GlobalShadows": true
+        "GlobalShadows": true,
+        "Technology": { "Enum": 4 }
       }
     }
   }

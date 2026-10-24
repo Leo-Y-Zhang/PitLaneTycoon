@@ -111,10 +111,10 @@ local function photoShoot()
 	cam.CameraType = Enum.CameraType.Scriptable
 	cam.FieldOfView = 55
 	local shots = {
-		{ "hero", base * CFrame.new(-36, 22, -44), base * CFrame.new(4, 2, 6) },
-		{ "car", base * CFrame.new(-9, 4.5, 6), base * CFrame.new(2, 1.5, 15) },
-		{ "line", base * CFrame.new(-28, 5, -9), base * CFrame.new(14, 2.5, 1) },
-		{ "paddock", base * CFrame.new(0, 42, -86), base * CFrame.new(0, 3, 0) },
+		{ "hero", base * CFrame.new(-14, 26, -54), base * CFrame.new(2, 2, 6) },
+		{ "car", base * CFrame.new(-2, 5, 5), base * CFrame.new(3, 1.6, 15) },
+		{ "line", base * CFrame.new(-22, 6, -12), base * CFrame.new(12, 2.5, 2) },
+		{ "paddock", base * CFrame.new(0, 48, -100), base * CFrame.new(0, 2, -10) },
 	}
 	for _, shot in shots do
 		cam.CFrame = CFrame.lookAt(shot[2].Position, shot[3].Position)
