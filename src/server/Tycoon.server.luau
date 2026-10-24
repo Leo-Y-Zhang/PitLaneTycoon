@@ -65,9 +65,11 @@ local function part(props: { [string]: any }): Part
 	return p
 end
 
-local function label(parent: Instance, text: string, height: number): TextLabel
+-- studs = a size in the world, so close machines' labels shrink with distance instead of
+-- piling on top of each other; without it the label stays readable from across the garage
+local function label(parent: Instance, text: string, height: number, studs: Vector2?): TextLabel
 	local gui = Instance.new("BillboardGui")
-	gui.Size = UDim2.fromOffset(220, 60)
+	gui.Size = studs and UDim2.fromScale(studs.X, studs.Y) or UDim2.fromOffset(220, 60)
 	gui.StudsOffset = Vector3.new(0, height, 0)
 	gui.AlwaysOnTop = false
 	gui.MaxDistance = 90
@@ -221,7 +223,10 @@ local function spawnPress(player: Player, item)
 		Name = item.key, Size = Vector3.new(3, 3, 3), Color = Color3.fromRGB(70, 74, 82),
 		Material = Enum.Material.Metal, CFrame = at(plot, item.x, 7, 0), Parent = plot.items,
 	})
-	label(body, item.name, 3)
+	part({ Name = "Cap", Size = Vector3.new(3.2, 0.3, 3.2), Color = plot.team.colour,
+		Material = Enum.Material.SmoothPlastic, CFrame = at(plot, item.x, 8.65, 0), Parent = plot.items })
+	-- alternate label heights so neighbouring presses don't overlap
+	label(body, item.name, 2.6 + (ITEM_BY_KEY[item.key] % 2) * 1.4, Vector2.new(4.6, 1.2))
 	task.spawn(function()
 		while body.Parent and states[player] == st and st.plot == plot do
 			local drop = Instance.new("Part")
@@ -244,7 +249,7 @@ local function spawnUpgrade(player: Player, item)
 		Material = Enum.Material.Neon, Transparency = 0.55, CanCollide = false,
 		CFrame = at(plot, item.x, 4, 0), Parent = plot.items,
 	})
-	label(gate, item.name, 4)
+	label(gate, item.name, 4, Vector2.new(5, 1.3))
 	local tag = "U_" .. item.key
 	gate.Touched:Connect(function(hit)
 		if hit.Parent == plot.drops and not hit:GetAttribute(tag) then
@@ -342,7 +347,7 @@ local function makePlot(index: number)
 		Color = Color3.fromRGB(30, 30, 30), Material = Enum.Material.DiamondPlate, Parent = model })
 	local collector = part({ Name = "Scrutineering", Size = Vector3.new(4, 3, 8), CFrame = at(plot, 26, 1.5, 0),
 		Color = Color3.fromRGB(0, 170, 110), Material = Enum.Material.Neon, Parent = model })
-	label(collector, "Scrutineering", 3)
+	label(collector, "Scrutineering", 3, Vector2.new(5.5, 1.4))
 	local collectPad = part({ Name = "CollectPad", Size = Vector3.new(6, 0.4, 6), CFrame = at(plot, 26, 0.2, 12),
 		Color = Color3.fromRGB(0, 120, 255), Material = Enum.Material.Neon, Parent = model })
 	plot.pendingLabel = label(collectPad, "Collect $0", 3)
