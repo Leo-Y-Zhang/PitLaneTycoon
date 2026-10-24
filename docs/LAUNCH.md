@@ -37,7 +37,11 @@ Roblox keeps 30% of each sale. Change prices after a week of data, not before.
    page before DevEx. Fill in the Maturity & Compliance questionnaire (needed before it can be
    public) and set the genre to Simulation/Tycoon.
 3. **Icon and thumbnails** matter more than anything else for clicks: a bright car on a
-   conveyor, big readable title, no small text. Make 3 thumbnails and rotate them.
+   conveyor, big readable title, no small text. Ready-made ones are in `marketing/`
+   (`icon.png` 512x512, `thumbnail-1..3.png` 1280x720); upload all three thumbnails so Roblox
+   rotates them. They contain no avatar or username. To remake them after a visual change:
+   `python tools/studio-test/run.py PitLaneTycoon.rbxlx --photos --shots shots` then
+   `python tools/studio-test/thumbnails.py shots marketing`.
 4. **Create the passes and products**, paste the ids into `Config.luau`, rebuild, republish.
 5. **First traffic:** share with friends for the first concurrent players; then a small Sponsored
    Experience campaign (Ads Manager) once Day-1 retention looks healthy. Do not spend on ads
@@ -66,6 +70,5 @@ before applying.
 
 ## Next features (in order of expected impact)
 
-1. Better-looking garages and a showpiece car per plot, then the icon and thumbnails.
-2. A second plot theme unlocked in season 3 (keeps rebirthing fresh).
-3. More machines between the power-unit bench and the trophy (a longer first season).
+1. A second plot theme unlocked in season 3 (keeps rebirthing fresh).
+2. More machines between the power-unit bench and the trophy (a longer first season).
