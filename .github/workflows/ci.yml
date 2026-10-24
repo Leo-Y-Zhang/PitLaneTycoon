@@ -26,6 +26,8 @@ jobs:
             71698e2454aacef1a144a498ffc1d7ea80654b9593025344672bc9106997bf6a globalTypes.d.luau | sha256sum -c -
           mkdir -p bin && unzip -oq luau.zip -d bin && unzip -oq rojo.zip -d bin && unzip -oq lsp.zip -d bin && chmod +x bin/*
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: The economy keeps its pacing
+        run: python3 tools/balance.py
       - name: Every Luau file compiles
         run: find src -name '*.luau' -print0 | xargs -0 -n1 luau-compile > /dev/null
       - name: The place file builds

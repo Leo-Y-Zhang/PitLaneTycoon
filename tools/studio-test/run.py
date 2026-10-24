@@ -81,6 +81,7 @@ def main() -> int:
     seen: dict[Path, int] = {log: log.stat().st_size for log in (ROBLOX / "logs").glob("*Studio*.log")}
     result = None
     studio = None
+    client_fails = 0
     try:
         studio = subprocess.Popen([str(studio_exe()), str(place)])
         while time.time() - started < a.timeout and result is None:
@@ -99,6 +100,7 @@ def main() -> int:
                         result = json.loads(text[len("RESULT "):])
                     else:
                         print(text, flush=True)
+                        client_fails += text.startswith("CLIENT-FAIL")
                         if text.startswith("SHOT") and a.shots:
                             a.shots.mkdir(parents=True, exist_ok=True)
                             name = text[4:].strip() or "studio-play"
@@ -116,8 +118,8 @@ def main() -> int:
         print("the play test could not start:", result.get("result"))
         return 2
     r = result["result"]
-    print(f"\n{r['passed']}/{r['total']} checks passed, {r['errors']} errors")
-    return 0 if r["passed"] == r["total"] and not r["errors"] else 1
+    print(f"\n{r['passed']}/{r['total']} checks passed, {client_fails} client checks failed, {r['errors']} errors")
+    return 0 if r["passed"] == r["total"] and not client_fails and not r["errors"] else 1
 
 
 if __name__ == "__main__":
