@@ -293,12 +293,22 @@ local function spawnPress(player: Player, item)
 	end)
 end
 
+-- an arch the parts ride through: dark posts, a team-colour beam and a faint curtain (the
+-- part that counts), so six gates in a row read as six gates rather than one glowing wall
 local function spawnUpgrade(player: Player, item)
 	local plot = states[player].plot
+	for _, z in { -3.9, 3.9 } do
+		part({ Name = item.key .. "_post", Size = Vector3.new(0.6, 6.6, 0.6), Color = Color3.fromRGB(40, 44, 50),
+			Material = Enum.Material.Metal, CanCollide = false, CanTouch = false, CFrame = at(plot, item.x, 4.3, z),
+			Parent = plot.items })
+	end
+	part({ Name = item.key .. "_beam", Size = Vector3.new(0.9, 0.6, 8.4), Color = plot.team.colour,
+		Material = Enum.Material.SmoothPlastic, CanCollide = false, CanTouch = false, CFrame = at(plot, item.x, 7.9, 0),
+		Parent = plot.items })
 	local gate = part({
-		Name = item.key, Size = Vector3.new(1.5, 6, 7.5), Color = Color3.fromRGB(255, 196, 0),
-		Material = Enum.Material.Neon, Transparency = 0.55, CanCollide = false,
-		CFrame = at(plot, item.x, 4, 0), Parent = plot.items,
+		Name = item.key, Size = Vector3.new(1, 5.6, 7.2), Color = Color3.fromRGB(255, 170, 0),
+		Material = Enum.Material.Neon, Transparency = 0.78, CanCollide = false,
+		CFrame = at(plot, item.x, 4.3, 0), Parent = plot.items,
 	})
 	label(gate, item.name, LABEL_HIGH[item.key] and 5.6 or 4, Vector2.new(4.4, 1.3))
 	local tag = "U_" .. item.key
@@ -477,6 +487,7 @@ local spawnPad = Instance.new("SpawnLocation")
 spawnPad.Size = Vector3.new(12, 1, 12)
 spawnPad.Anchored = true
 spawnPad.Neutral = true
+spawnPad.Duration = 0 -- no fighting here, so no spawn-protection bubble on arrival
 spawnPad.Color = Color3.fromRGB(230, 230, 235)
 spawnPad.CFrame = CFrame.new(0, 0.5, 0)
 spawnPad.Parent = workspace

@@ -223,10 +223,42 @@ LogService.MessageOut:Connect(function(message, kind)
 end)
 
 if SCENARIO == "photo" then
-	-- the client takes the pictures; the server keeps the session open long enough and
+	-- the client takes the pictures; the server keeps the session open long enough, checks
+	-- that every gate marks the parts riding through it (every machine is built here), and
 	-- reports any error from building every machine at once
+	local gates = {}
+	for _, model in workspace:WaitForChild("Plots"):GetChildren() do
+		for _, item in model:WaitForChild("Items"):GetChildren() do
+			if item:IsA("BasePart") and item.Material == Enum.Material.Neon and item.Size.Y > 5 then
+				gates["U_" .. item.Name] = true
+			end
+		end
+	end
+	local seen, marked = 0, 0
+	task.delay(10, function()
+		for _ = 1, 40 do
+			for _, model in workspace.Plots:GetChildren() do
+				local base = model:FindFirstChild("Base") :: BasePart?
+				for _, drop in model.Drops:GetChildren() do
+					-- past the last gate (x = 20.5) and not yet at scrutineering (x = 24)
+					local x = base and base.CFrame:PointToObjectSpace((drop :: BasePart).Position).X or 0
+					if x > 21.6 and x < 24 then
+						seen += 1
+						local all = next(gates) ~= nil
+						for tag in gates do
+							all = all and drop:GetAttribute(tag) == true
+						end
+						marked += all and 1 or 0
+					end
+				end
+			end
+			task.wait(0.25)
+		end
+	end)
 	task.delay(45, function()
-		StudioTestService:EndTest({ passed = 0, total = 0, errors = errors, warnings = warnings })
+		local ok = seen > 0 and marked == seen
+		print(TAG, (ok and "PASS " or "FAIL ") .. ("every gate marks the parts that pass it (%d of %d)"):format(marked, seen))
+		StudioTestService:EndTest({ passed = ok and 1 or 0, total = 1, errors = errors, warnings = warnings })
 	end)
 	return
 end
