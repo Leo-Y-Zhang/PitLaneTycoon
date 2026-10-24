@@ -47,10 +47,29 @@ local function remote(name: string): RemoteEvent
 end
 local notify = remote("Notify")
 local newSeason = remote("NewSeason")
+local effect = remote("Effect") -- purchase sparks and "+$" pop-ups, drawn by the owner's HUD
 
 local ITEM_BY_KEY = {}
 for i, item in Config.Items do
 	ITEM_BY_KEY[item.key] = i
+end
+
+-- machines take turns at two label heights in the order they stand along the conveyor, so
+-- neighbours' names never overlap
+local LABEL_HIGH: { [string]: boolean } = {}
+for _, kind in { "press", "upgrade" } do
+	local line = {}
+	for _, item in Config.Items do
+		if item.kind == kind then
+			table.insert(line, item)
+		end
+	end
+	table.sort(line, function(a, b)
+		return (a.x :: number) < (b.x :: number)
+	end)
+	for rank, item in line do
+		LABEL_HIGH[item.key] = rank % 2 == 0
+	end
 end
 
 -- small helpers ---------------------------------------------------------------------
@@ -138,18 +157,52 @@ local function multiplier(st: State): number
 	return baseMultiplier(st) * (1 + friendBoost(st)) * (happyHour and Config.HappyHour.mult or 1)
 end
 
+local function conveyorSpeed(st: State): number
+	local speed = Config.BaseConveyorSpeed
+	for _, item in Config.Items do
+		if item.kind == "speed" and st.data.bought[item.key] then
+			speed = math.max(speed, item.speed :: number)
+		end
+	end
+	return speed
+end
+
+-- a faster conveyor runs the presses faster too, so the parts stay the same distance apart
+local function pressInterval(st: State, item: Config.Item): number
+	return (item.every :: number) * Config.BaseConveyorSpeed / conveyorSpeed(st)
+end
+
+local function pressValue(st: State, item: Config.Item): number
+	local value = item.value :: number
+	for _, tune in Config.Items do
+		if tune.kind == "tune" and tune.target == item.key and st.data.bought[tune.key] then
+			value *= tune.mult :: number
+		end
+	end
+	return value
+end
+
 local function incomePerMinute(st: State, lastingOnly: boolean?): number
 	local perMin, upgrade = 0, 1
 	for _, item in Config.Items do
 		if st.data.bought[item.key] then
 			if item.kind == "press" then
-				perMin += (item.value :: number) / (item.every :: number) * 60
+				perMin += pressValue(st, item) / pressInterval(st, item) * 60
 			elseif item.kind == "upgrade" then
 				upgrade *= item.mult :: number
 			end
 		end
 	end
 	return perMin * upgrade * (lastingOnly and baseMultiplier(st) or multiplier(st))
+end
+
+local function nextItemIndex(st: State): number?
+	for i, item in Config.Items do
+		if not st.data.bought[item.key] and (item.season or 0) <= st.data.season then
+			return i
+		end
+	end
+	return nil
 end
 
 local function publish(player: Player)
@@ -166,6 +219,12 @@ local function publish(player: Player)
 	player:SetAttribute("SeasonCost", Config.SeasonCost(st.data.season))
 	player:SetAttribute("HasTrophy", st.data.bought.trophy == true)
 	player:SetAttribute("FriendBoost", math.floor(friendBoost(st) * 100 + 0.5))
+	local nextIndex = nextItemIndex(st)
+	local nextItem = nextIndex and Config.Items[nextIndex]
+	player:SetAttribute("NextKey", nextItem and nextItem.key or "")
+	player:SetAttribute("NextName", nextItem and nextItem.name or "")
+	player:SetAttribute("NextCost", nextItem and nextItem.cost or 0)
+	player:SetAttribute("Plot", st.plot and st.plot.index or 0)
 	for name in Config.Passes do
 		player:SetAttribute("Owns" .. name, st.passes[name] == true)
 	end
@@ -195,15 +254,6 @@ local function at(plot, x: number, y: number, z: number): CFrame
 	return plot.cf * CFrame.new(x, y, z)
 end
 
-local function nextItemIndex(st: State): number?
-	for i, item in Config.Items do
-		if not st.data.bought[item.key] then
-			return i
-		end
-	end
-	return nil
-end
-
 local function refreshPads(player: Player)
 	local st = states[player]
 	if not st or not st.plot then return end
@@ -225,8 +275,7 @@ local function spawnPress(player: Player, item)
 	})
 	part({ Name = "Cap", Size = Vector3.new(3.2, 0.3, 3.2), Color = plot.team.colour,
 		Material = Enum.Material.SmoothPlastic, CFrame = at(plot, item.x, 8.65, 0), Parent = plot.items })
-	-- alternate label heights so neighbouring presses don't overlap
-	label(body, item.name, 2.6 + (ITEM_BY_KEY[item.key] % 2) * 1.4, Vector2.new(4.6, 1.2))
+	plot.pressLabels[item.key] = label(body, item.name, LABEL_HIGH[item.key] and 4 or 2.6, Vector2.new(4.6, 1.2))
 	task.spawn(function()
 		while body.Parent and states[player] == st and st.plot == plot do
 			local drop = Instance.new("Part")
@@ -234,10 +283,12 @@ local function spawnPress(player: Player, item)
 			drop.Color = Color3.fromRGB(196, 202, 210)
 			drop.Material = Enum.Material.SmoothPlastic
 			drop.CFrame = at(plot, item.x, 4.6, 0)
-			drop:SetAttribute("Value", item.value)
+			drop:SetAttribute("Value", pressValue(st, item))
 			drop.Parent = plot.drops
+			-- the server moves every part, so a player's client can't steer them
+			drop:SetNetworkOwner(nil)
 			Debris:AddItem(drop, Config.PartLifetime)
-			task.wait(item.every)
+			task.wait(pressInterval(st, item))
 		end
 	end)
 end
@@ -249,7 +300,7 @@ local function spawnUpgrade(player: Player, item)
 		Material = Enum.Material.Neon, Transparency = 0.55, CanCollide = false,
 		CFrame = at(plot, item.x, 4, 0), Parent = plot.items,
 	})
-	label(gate, item.name, 4, Vector2.new(5, 1.3))
+	label(gate, item.name, LABEL_HIGH[item.key] and 5.6 or 4, Vector2.new(4.4, 1.3))
 	local tag = "U_" .. item.key
 	gate.Touched:Connect(function(hit)
 		if hit.Parent == plot.drops and not hit:GetAttribute(tag) then
@@ -260,14 +311,23 @@ local function spawnUpgrade(player: Player, item)
 	end)
 end
 
-local function conveyorSpeed(st: State): number
-	local speed = Config.BaseConveyorSpeed
-	for _, item in Config.Items do
-		if item.kind == "speed" and st.data.bought[item.key] then
-			speed = math.max(speed, item.speed :: number)
+-- a tune-up: a glowing band round its press (one more per Mk) and the press's new name
+local function spawnTune(player: Player, item)
+	local st = states[player]
+	local plot = st.plot
+	local press = Config.Items[ITEM_BY_KEY[item.target]]
+	local tier = 0
+	for _, other in Config.Items do
+		if other.kind == "tune" and other.target == item.target and st.data.bought[other.key] then
+			tier += 1
 		end
+		if other == item then break end
 	end
-	return speed
+	part({ Name = item.key, Size = Vector3.new(3.3, 0.4, 3.3), Color = Color3.fromRGB(255, 205, 60),
+		Material = Enum.Material.Neon, CanCollide = false, CFrame = at(plot, press.x :: number, 5.6 + tier * 0.7, 0),
+		Parent = plot.items })
+	local name = plot.pressLabels[item.target]
+	if name then name.Text = item.name end
 end
 
 local function build(player: Player, item)
@@ -276,6 +336,8 @@ local function build(player: Player, item)
 		spawnPress(player, item)
 	elseif item.kind == "upgrade" then
 		spawnUpgrade(player, item)
+	elseif item.kind == "tune" then
+		spawnTune(player, item)
 	elseif item.kind == "speed" then
 		st.plot.conveyor.AssemblyLinearVelocity = st.plot.cf.RightVector * conveyorSpeed(st)
 	elseif item.kind == "trophy" then
@@ -292,6 +354,7 @@ local function rebuildPlot(player: Player)
 	local plot = st.plot
 	plot.items:ClearAllChildren()
 	plot.drops:ClearAllChildren()
+	plot.pressLabels = {}
 	Scenery.car(plot.items, at(plot, 2, 0, 15) * CFrame.Angles(0, math.rad(90), 0), plot.team.colour, st.data.season)
 	plot.conveyor.AssemblyLinearVelocity = plot.cf.RightVector * conveyorSpeed(st)
 	for _, item in Config.Items do
@@ -317,6 +380,7 @@ local function tryBuy(player: Player, index: number)
 	refreshPads(player)
 	publish(player)
 	notify:FireClient(player, "Bought " .. item.name)
+	effect:FireClient(player, "bought", item.key)
 end
 
 local function bankPending(player: Player)
@@ -325,13 +389,14 @@ local function bankPending(player: Player)
 		local amount = st.pending
 		st.pending = 0
 		addCash(player, amount, true)
+		effect:FireClient(player, "banked", amount)
 	end
 end
 
 local function makePlot(index: number)
 	local angle = (index - 1) / Config.PlotCount * math.pi * 2
 	local centre = Vector3.new(math.cos(angle), 0, math.sin(angle)) * Config.PlotRadius
-	local plot = { index = index, owner = nil :: Player?, pads = {}, team = Scenery.Teams[(index - 1) % #Scenery.Teams + 1] }
+	local plot = { index = index, owner = nil :: Player?, pads = {}, pressLabels = {}, team = Scenery.Teams[(index - 1) % #Scenery.Teams + 1] }
 	plot.cf = CFrame.lookAt(centre, Vector3.new(0, 0, 0)) -- local -Z faces the spawn
 	local model = Instance.new("Model")
 	model.Name = "Plot" .. index
@@ -381,8 +446,10 @@ local function makePlot(index: number)
 		if player then bankPending(player) end
 	end)
 	for i, item in Config.Items do
+		-- two rows of twelve in front of the line; only the next pad is ever lit
+		local col, row = (i - 1) % 12, (i - 1) // 12
 		local pad = part({ Name = "Buy_" .. item.key, Size = Vector3.new(4, 0.4, 4),
-			CFrame = at(plot, -27 + (i - 1) * 5.4, 0.2, -18), Color = Color3.fromRGB(255, 70, 70),
+			CFrame = at(plot, -27 + col * 4.9, 0.2, -18 + row * 5), Color = Color3.fromRGB(255, 70, 70),
 			Material = Enum.Material.Neon, Transparency = 1, CanTouch = false, Parent = model })
 		local text = label(pad, item.name .. "\n" .. (item.cost == 0 and "Free" or money(item.cost)), 3)
 		local board = text.Parent :: BillboardGui
@@ -418,9 +485,9 @@ part({ Name = "Paddock", Size = Vector3.new(2 * Config.PlotRadius + 140, 1, 2 * 
 Scenery.paddock(Config.PlotCount, Config.PlotRadius, 26)
 
 -- saving ----------------------------------------------------------------------------
-local function save(player: Player)
+local function save(player: Player): boolean
 	local st = states[player]
-	if not st or not st.canSave or not store then return end
+	if not st or not st.canSave or not store then return false end
 	st.data.lastSeen = os.time()
 	st.data.offlineRate = incomePerMinute(st, true)
 	local snapshot = table.clone(st.data)
@@ -441,6 +508,7 @@ local function save(player: Player)
 			board:SetAsync("u_" .. player.UserId, math.floor(st.data.earned))
 		end)
 	end
+	return ok
 end
 
 local function load(player: Player): (Data, boolean)
@@ -499,10 +567,20 @@ MarketplaceService.ProcessReceipt = function(receipt)
 	end
 	for _, product in Config.Products do
 		if product.id ~= 0 and product.id == receipt.ProductId then
+			-- report a purchase granted only once it is saved; otherwise Roblox offers it
+			-- again on the player's next visit, instead of the Robux buying nothing
+			if not (store and st.canSave) then
+				return Enum.ProductPurchaseDecision.NotProcessedYet
+			end
 			local amount = math.max(product.floor, incomePerMinute(st) * product.minutes)
 			st.data.receipts[receipt.PurchaseId] = true
 			addCash(player, amount)
-			save(player)
+			if not save(player) then
+				st.data.receipts[receipt.PurchaseId] = nil
+				st.data.cash = math.max(0, st.data.cash - amount)
+				publish(player)
+				return Enum.ProductPurchaseDecision.NotProcessedYet
+			end
 			notify:FireClient(player, product.name .. ": +" .. money(amount))
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		end
@@ -536,7 +614,8 @@ local function dailyReward(player: Player, st: State)
 	if since < Config.DailyCooldownHours then return end
 	st.data.streak = (since <= Config.StreakBreakHours) and st.data.streak + 1 or 1
 	st.data.lastDaily = now
-	local reward = Config.DailyRewards[math.min(st.data.streak, #Config.DailyRewards)] * multiplier(st)
+	local day = math.min(st.data.streak, #Config.DailyRewards.cash)
+	local reward = math.max(Config.DailyRewards.cash[day] * multiplier(st), incomePerMinute(st) * Config.DailyRewards.minutes[day])
 	addCash(player, reward)
 	notify:FireClient(player, ("Day %d streak: +%s"):format(st.data.streak, money(reward)))
 end
@@ -739,10 +818,18 @@ end)
 
 game:BindToClose(function()
 	if RunService:IsStudio() and not store then return end
+	local saving = 0
 	for player in states do
-		task.spawn(save, player)
+		saving += 1
+		task.spawn(function()
+			save(player)
+			saving -= 1
+		end)
 	end
-	task.wait(3)
+	local started = os.clock()
+	while saving > 0 and os.clock() - started < 25 do -- Roblox allows 30 s here
+		task.wait(0.2)
+	end
 end)
 
 task.spawn(function()

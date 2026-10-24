@@ -19,18 +19,23 @@ Config.Products = {
 }
 
 -- Production line, bought in order. Each pad appears once the one before it is bought.
--- kind: "press" makes parts, "upgrade" multiplies a part's value as it passes,
--- "speed" speeds the conveyor, "trophy" unlocks the new-season (rebirth) button.
+-- kind: "press" makes parts, "tune" multiplies one press's parts, "upgrade" multiplies a
+-- part's value as it passes, "speed" runs the conveyor and every press faster, "trophy"
+-- unlocks the new-season (rebirth) button. `season` = the first season (0-based) an item
+-- appears in, so later seasons have machines the first one never had.
+-- Pacing: `python tools/balance.py` prints the minutes each purchase takes (CI checks it).
 export type Item = {
 	key: string,
 	name: string,
 	cost: number,
 	kind: string,
-	every: number?, -- press: seconds between parts
+	every: number?, -- press: seconds between parts at the base conveyor speed
 	value: number?, -- press: cash per part before multipliers
 	x: number?, -- press/upgrade: position along the conveyor (studs from its centre)
-	mult: number?, -- upgrade: value multiplier
+	mult: number?, -- tune/upgrade: value multiplier
 	speed: number?, -- speed: conveyor studs per second
+	target: string?, -- tune: the press it improves
+	season: number?, -- first season it appears in (default 0)
 }
 
 Config.Items = {
@@ -38,13 +43,26 @@ Config.Items = {
 	{ key = "press2", name = "Bracket press", cost = 60, kind = "press", every = 2.0, value = 5, x = -11 },
 	{ key = "speed1", name = "Faster conveyor", cost = 150, kind = "speed", speed = 14 },
 	{ key = "press3", name = "Wishbone press", cost = 400, kind = "press", every = 1.8, value = 12, x = -6 },
-	{ key = "up1", name = "Paint shop (x2)", cost = 1200, kind = "upgrade", mult = 2, x = 6 },
-	{ key = "press4", name = "Gearbox line", cost = 3500, kind = "press", every = 1.6, value = 30, x = -1 },
-	{ key = "up2", name = "Wind tunnel (x1.5)", cost = 9000, kind = "upgrade", mult = 1.5, x = 11 },
-	{ key = "speed2", name = "Pit-crew conveyor", cost = 15000, kind = "speed", speed = 20 },
-	{ key = "press5", name = "Carbon-fibre autoclave", cost = 30000, kind = "press", every = 1.5, value = 90, x = 4 },
-	{ key = "press6", name = "Power-unit bench", cost = 80000, kind = "press", every = 1.4, value = 220, x = -19 },
-	{ key = "trophy", name = "Constructors' trophy", cost = 200000, kind = "trophy" },
+	{ key = "tune1", name = "Bolt press Mk II", cost = 1900, kind = "tune", target = "press1", mult = 3 },
+	{ key = "up1", name = "Paint shop (x2)", cost = 2500, kind = "upgrade", mult = 2, x = 6 },
+	{ key = "press4", name = "Gearbox line", cost = 5500, kind = "press", every = 1.6, value = 30, x = -1 },
+	{ key = "tune2", name = "Bracket press Mk II", cost = 15000, kind = "tune", target = "press2", mult = 3 },
+	{ key = "up2", name = "Wind tunnel (x1.5)", cost = 19000, kind = "upgrade", mult = 1.5, x = 11 },
+	{ key = "speed2", name = "Pit-crew conveyor", cost = 30000, kind = "speed", speed = 20 },
+	{ key = "press5", name = "Carbon-fibre autoclave", cost = 46000, kind = "press", every = 1.5, value = 90, x = 4 },
+	{ key = "tune3", name = "Wishbone press Mk II", cost = 130000, kind = "tune", target = "press3", mult = 3 },
+	{ key = "up3", name = "Brake dyno (x2)", cost = 160000, kind = "upgrade", mult = 2, x = 16 },
+	{ key = "press6", name = "Power-unit bench", cost = 330000, kind = "press", every = 1.4, value = 220, x = -19 },
+	{ key = "tune4", name = "Gearbox line Mk II", cost = 850000, kind = "tune", target = "press4", mult = 3 },
+	{ key = "speed3", name = "Race-spec conveyor", cost = 1000000, kind = "speed", speed = 26 },
+	{ key = "tune5", name = "Autoclave Mk II", cost = 1400000, kind = "tune", target = "press5", mult = 3 },
+	{ key = "up4", name = "Simulator (x2)", cost = 2000000, kind = "upgrade", mult = 2, x = 20.5 },
+	{ key = "tune6", name = "Power-unit bench Mk II", cost = 4200000, kind = "tune", target = "press6", mult = 3 },
+	{ key = "up5", name = "Telemetry (x2)", cost = 6500000, kind = "upgrade", mult = 2, x = 13.5, season = 1 },
+	{ key = "tune7", name = "Autoclave Mk III", cost = 12000000, kind = "tune", target = "press5", mult = 2, season = 1 },
+	{ key = "up6", name = "Hybrid power (x2)", cost = 20000000, kind = "upgrade", mult = 2, x = 8.5, season = 2 },
+	{ key = "tune8", name = "Power-unit bench Mk III", cost = 40000000, kind = "tune", target = "press6", mult = 2, season = 2 },
+	{ key = "trophy", name = "Constructors' trophy", cost = 9200000, kind = "trophy" },
 } :: { Item }
 
 Config.BaseConveyorSpeed = 9
@@ -52,13 +70,17 @@ Config.PartLifetime = 25 -- seconds before an uncollected part is cleared
 
 -- New season (rebirth): wipes cash and the line, keeps a permanent multiplier.
 Config.SeasonBonus = 0.5 -- each season adds +50% to all earnings
+Config.SeasonCostBase = 9000000
 Config.SeasonCost = function(season: number): number
-	return 200000 * (season + 1)
+	return Config.SeasonCostBase * (season + 1)
 end
 
--- Daily reward: a streak keeps players coming back. Day n pays rewards[min(n, #rewards)]
--- multiplied by the player's season multiplier.
-Config.DailyRewards = { 100, 250, 500, 1000, 2000, 4000, 8000 }
+-- Daily reward: a streak keeps players coming back. Day n pays the larger of cash[n] times
+-- the season multiplier and minutes[n] of the player's income (n capped at the last day).
+Config.DailyRewards = {
+	cash = { 100, 250, 500, 1000, 2000, 4000, 8000 },
+	minutes = { 1, 2, 3, 5, 8, 12, 20 },
+}
 Config.DailyCooldownHours = 20
 Config.StreakBreakHours = 48
 

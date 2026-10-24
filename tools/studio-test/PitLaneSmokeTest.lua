@@ -130,7 +130,12 @@ local function photoShoot()
 	print(TAG, "PHOTOS-DONE")
 end
 
--- client: report the HUD and client-side errors -----------------------------------------
+-- client: check the HUD and report client-side errors ----------------------------------
+-- run.py counts every CLIENT-FAIL line as a failed check
+local function clientCheck(name: string, pass: any, detail: any?)
+	print(TAG, (pass and "CLIENT-PASS " or "CLIENT-FAIL ") .. name .. (detail ~= nil and (" (" .. tostring(detail) .. ")") or ""))
+end
+
 if RunService:IsClient() then
 	if workspace:GetAttribute("PhotoMode") then
 		task.spawn(photoShoot)
@@ -147,10 +152,45 @@ if RunService:IsClient() then
 			return player and player:FindFirstChild("PlayerGui") and player.PlayerGui:FindFirstChild("PitLaneHud")
 		end, 30)
 		if not hud then
-			print(TAG, "CLIENT-HUD missing")
+			clientCheck("the HUD appears", false)
 			return
 		end
-		for _, delay in { 3, 7, 10 } do -- the server half finishes in about 30 s
+		local popUps = 0
+		task.spawn(function()
+			local character = player.Character or player.CharacterAdded:Wait()
+			character:WaitForChild("HumanoidRootPart").ChildAdded:Connect(function(child)
+				local label = child:IsA("BillboardGui") and child:FindFirstChildOfClass("TextLabel")
+				if label and string.sub(label.Text, 1, 2) == "+$" then
+					popUps += 1
+				end
+			end)
+		end)
+
+		task.wait(3)
+		local guide = workspace:FindFirstChild("PitLaneGuide")
+		local to = guide and guide:IsA("Beam") and guide.Enabled and guide.Attachment1
+		local target = to and to.Parent and to.Parent.Name or "none"
+		clientCheck("a guide line leads to the pad to step on next",
+			string.sub(target, 1, 4) == "Buy_" or target == "CollectPad", target)
+		local shop, nextText = nil, nil
+		for _, d in hud:GetDescendants() do
+			if d:IsA("TextButton") and d.Text == "Shop" then
+				shop = d
+			elseif d:IsA("TextLabel") and string.sub(d.Text, 1, 5) == "Next:" then
+				nextText = d.Text
+			end
+		end
+		clientCheck("the next purchase and its price are on show", nextText, nextText)
+		local view = workspace.CurrentCamera.ViewportSize
+		local bottom = shop and shop.AbsolutePosition.Y + shop.AbsoluteSize.Y
+		clientCheck("the buttons sit clear of a phone's thumbstick corner", bottom and bottom <= view.Y * 0.62,
+			bottom and ("%d of %d px"):format(bottom, view.Y))
+		local tick = game:GetService("SoundService"):FindFirstChild("PitLaneTick")
+		clientCheck("the purchase sound loads", tick and waitFor(function()
+			return (tick :: Sound).IsLoaded
+		end, 8))
+
+		for _, delay in { 4, 10, 15 } do -- the server half finishes in about a minute
 			task.wait(delay)
 			local texts = {}
 			for _, d in hud:GetDescendants() do
@@ -160,6 +200,7 @@ if RunService:IsClient() then
 			end
 			print(TAG, "CLIENT-HUD " .. table.concat(texts, " | "))
 		end
+		clientCheck("banking cash shows a +$ pop-up", popUps > 0, popUps)
 	end)
 	return
 end
@@ -171,13 +212,6 @@ end)
 if not okArgs or type(args) ~= "table" or args.scenario ~= SCENARIO then
 	return
 end
-if SCENARIO == "photo" then
-	-- the client takes the pictures; the server only keeps the session open long enough
-	task.delay(45, function()
-		StudioTestService:EndTest({ passed = 0, total = 0, errors = {}, warnings = {} })
-	end)
-	return
-end
 
 local checks, errors, warnings = {}, {}, {}
 LogService.MessageOut:Connect(function(message, kind)
@@ -187,6 +221,15 @@ LogService.MessageOut:Connect(function(message, kind)
 		table.insert(warnings, message)
 	end
 end)
+
+if SCENARIO == "photo" then
+	-- the client takes the pictures; the server keeps the session open long enough and
+	-- reports any error from building every machine at once
+	task.delay(45, function()
+		StudioTestService:EndTest({ passed = 0, total = 0, errors = errors, warnings = warnings })
+	end)
+	return
+end
 
 local function check(name: string, pass: any, detail: any?)
 	local ok = pass and true or false
@@ -264,6 +307,8 @@ local function run()
 		return false
 	end, 10))
 	check("first press is built", plot.Items:FindFirstChild("press1"))
+	check("the next purchase is published", player:GetAttribute("NextKey") == "press2"
+		and player:GetAttribute("NextCost") == 60, player:GetAttribute("NextKey"))
 
 	local character = waitFor(function()
 		local c = player.Character
@@ -297,6 +342,17 @@ local function run()
 	check("parts reach scrutineering", waitFor(function()
 		return (player:GetAttribute("Pending") or 0) > 0
 	end, 15), player:GetAttribute("Pending"))
+	-- left to Roblox, a part near a player is simulated on that player's computer
+	local clientOwned = 0
+	for _ = 1, 10 do
+		for _, d in plot.Drops:GetChildren() do
+			if d:IsA("BasePart") and d:GetNetworkOwner() ~= nil then
+				clientOwned += 1
+			end
+		end
+		task.wait(0.3)
+	end
+	check("the server moves every part on the line", clientOwned == 0, clientOwned)
 
 	-- a new part can land while we walk, so only the bank balance is checked
 	local before = cash.Value
@@ -305,12 +361,15 @@ local function run()
 	check("the blue pad banks the cash", cash.Value >= before + pending,
 		("cash %d -> %d, pending %d"):format(before, cash.Value, pending))
 
-	-- earn enough for the second press if the daily reward did not cover it
-	local t0 = os.clock()
-	while cash.Value < 60 and os.clock() - t0 < 120 do
-		task.wait(4)
-		standOn("CollectPad")
+	local function earn(amount: number)
+		local t0 = os.clock()
+		while cash.Value < amount and os.clock() - t0 < 120 do
+			task.wait(4)
+			standOn("CollectPad")
+		end
 	end
+	-- earn enough for the second press if the daily reward did not cover it
+	earn(60)
 	check("$60 earned for the Bracket press", cash.Value >= 60, cash.Value)
 
 	local pad2 = plot:FindFirstChild("Buy_press2") :: BasePart
@@ -325,13 +384,23 @@ local function run()
 	local pad3 = plot:FindFirstChild("Buy_speed1") :: BasePart
 	check("the next pad lights up", pad3 and pad3.Transparency == 0 and pad3.CanTouch)
 	check("the bought pad goes dark", pad2.Transparency == 1 and not pad2.CanTouch)
+	check("the next purchase moves on", player:GetAttribute("NextKey") == "speed1", player:GetAttribute("NextKey"))
 
 	if cash.Value < 150 then
 		standOn("Buy_speed1")
 		task.wait(1)
-		check("a pad you cannot afford does not sell", not plot.Items:FindFirstChild("speed1")
+		check("a pad you cannot afford does not sell", player:GetAttribute("NextKey") == "speed1"
 			and pad3.Transparency == 0, cash.Value)
 	end
+
+	earn(150)
+	standOn("Buy_speed1")
+	check("the faster conveyor is bought", waitFor(function()
+		return player:GetAttribute("NextKey") == "press3"
+	end, 3), player:GetAttribute("NextKey"))
+	-- 9 -> 14 studs/s runs both presses 14/9 as fast: $210/min becomes $326/min
+	check("a faster conveyor speeds every press up", player:GetAttribute("IncomePerMin") == math.floor(210 * 14 / 9 * x),
+		player:GetAttribute("IncomePerMin"))
 
 	-- leave the character somewhere visible for a screenshot
 	character:PivotTo(base.CFrame * CFrame.new(-8, 4, -14) * CFrame.Angles(0, math.rad(200), 0))
