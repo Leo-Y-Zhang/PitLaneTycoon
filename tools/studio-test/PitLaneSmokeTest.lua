@@ -224,40 +224,22 @@ end)
 
 if SCENARIO == "photo" then
 	-- the client takes the pictures; the server keeps the session open long enough, checks
-	-- that every gate marks the parts riding through it (every machine is built here), and
-	-- reports any error from building every machine at once
-	local gates = {}
-	for _, model in workspace:WaitForChild("Plots"):GetChildren() do
-		for _, item in model:WaitForChild("Items"):GetChildren() do
-			if item:IsA("BasePart") and item.Material == Enum.Material.Neon and item.Size.Y > 5 then
-				gates["U_" .. item.Name] = true
-			end
-		end
-	end
-	local seen, marked = 0, 0
-	task.delay(10, function()
-		for _ = 1, 40 do
-			for _, model in workspace.Plots:GetChildren() do
-				local base = model:FindFirstChild("Base") :: BasePart?
-				for _, drop in model.Drops:GetChildren() do
-					-- past the last gate (x = 20.5) and not yet at scrutineering (x = 24)
-					local x = base and base.CFrame:PointToObjectSpace((drop :: BasePart).Position).X or 0
-					if x > 21.6 and x < 24 then
-						seen += 1
-						local all = next(gates) ~= nil
-						for tag in gates do
-							all = all and drop:GetAttribute(tag) == true
-						end
-						marked += all and 1 or 0
-					end
-				end
-			end
-			task.wait(0.25)
-		end
+	-- that a garage with every machine earns what the HUD says it earns, and reports any
+	-- error from building every machine at once
+	local ratio = 0
+	task.spawn(function()
+		local player = waitFor(function()
+			return Players:GetPlayers()[1]
+		end, 30)
+		task.wait(12)
+		local before = player and player:GetAttribute("Pending") or 0
+		task.wait(20)
+		local perMin = player and player:GetAttribute("IncomePerMin") or 0
+		ratio = ((player and player:GetAttribute("Pending") or 0) - before) * 3 / math.max(perMin, 1)
 	end)
 	task.delay(45, function()
-		local ok = seen > 0 and marked == seen
-		print(TAG, (ok and "PASS " or "FAIL ") .. ("every gate marks the parts that pass it (%d of %d)"):format(marked, seen))
+		local ok = ratio > 0.85 and ratio < 1.15
+		print(TAG, (ok and "PASS " or "FAIL ") .. ("a full garage earns what the HUD says (%.2f of it)"):format(ratio))
 		StudioTestService:EndTest({ passed = ok and 1 or 0, total = 1, errors = errors, warnings = warnings })
 	end)
 	return
