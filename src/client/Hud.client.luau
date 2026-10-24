@@ -340,11 +340,13 @@ end
 local function popUp(text: string)
 	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	if not root then return end
-	local board = new("BillboardGui", { Size = UDim2.fromOffset(160, 40), StudsOffset = Vector3.new(0, 3, 0), AlwaysOnTop = true }, root)
+	-- built whole before it goes on the character, so it appears with its text
+	local board = new("BillboardGui", { Size = UDim2.fromOffset(160, 40), StudsOffset = Vector3.new(0, 3, 0), AlwaysOnTop = true })
 	local label = new("TextLabel", {
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextScaled = true,
 		TextColor3 = GREEN, TextStrokeTransparency = 0.3, Text = text,
 	}, board)
+	board.Parent = root
 	TweenService:Create(board, TweenInfo.new(1.1), { StudsOffset = Vector3.new(0, 6, 0) }):Play()
 	TweenService:Create(label, TweenInfo.new(1.1), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
 	Debris:AddItem(board, 1.2)

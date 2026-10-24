@@ -1,9 +1,11 @@
 # Pit Lane Tycoon
 
 A Roblox incremental tycoon. You run a racing team's factory: presses stamp out car parts, the
-conveyor carries them through the paint shop and wind tunnel to scrutineering, and every part
-that passes earns cash for the next machine. Win the Constructors' trophy, then start a new
-season: the garage resets, but every season adds +50% to all earnings for good.
+conveyor carries them through the paint shop, wind tunnel and the rest to scrutineering, and
+every part that passes earns cash for the next machine. Twenty-four purchases later (about an
+hour) you win the Constructors' trophy and can start a new season: the garage resets, every
+season adds +50% to all earnings for good, and seasons 2 and 3 bring machines the first one
+never had.
 
 All of it is code (Luau, synced with [Rojo](https://rojo.space)). The map is built by the
 server at start-up, so the place file needs nothing made by hand.
@@ -27,10 +29,13 @@ in [docs/LAUNCH.md](docs/LAUNCH.md).
 | What | Where |
 |---|---|
 | Prices, machines, multipliers, season cost, daily rewards, pass ids | `src/shared/Config.luau` |
+| How long each purchase and season takes | `python tools/balance.py` (reads the config) |
 | The map, the production line, money, saving, purchases | `src/server/Tycoon.server.luau` |
 | The on-screen HUD and shop | `src/client/Hud.client.luau` |
 
 Build the place file: `rojo build default.project.json -o PitLaneTycoon.rbxlx`.
 Live-sync while editing: `rojo serve`, with the Rojo plugin connected in Studio.
 
-CI checks that every Luau file compiles and that the place file builds.
+CI checks that every Luau file compiles and type-checks against the Roblox API, that the place
+file builds, and that the pacing holds: the first season takes 45-90 minutes and no purchase
+more than 8 (`tools/balance.py`).
