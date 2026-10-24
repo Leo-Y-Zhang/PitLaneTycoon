@@ -311,7 +311,8 @@ local function spawnUpgrade(player: Player, item)
 	end)
 end
 
--- a tune-up: a glowing band round its press (one more per Mk) and the press's new name
+-- a tune-up: a gold band round its press (one more per Mk) and the press's new name; metal,
+-- not neon, so the bands don't bloom into one streak along the line
 local function spawnTune(player: Player, item)
 	local st = states[player]
 	local plot = st.plot
@@ -323,8 +324,8 @@ local function spawnTune(player: Player, item)
 		end
 		if other == item then break end
 	end
-	part({ Name = item.key, Size = Vector3.new(3.3, 0.4, 3.3), Color = Color3.fromRGB(255, 205, 60),
-		Material = Enum.Material.Neon, CanCollide = false, CFrame = at(plot, press.x :: number, 5.6 + tier * 0.7, 0),
+	part({ Name = item.key, Size = Vector3.new(3.25, 0.3, 3.25), Color = Color3.fromRGB(212, 175, 55),
+		Material = Enum.Material.Metal, CanCollide = false, CFrame = at(plot, press.x :: number, 5.6 + tier * 0.7, 0),
 		Parent = plot.items })
 	local name = plot.pressLabels[item.target]
 	if name then name.Text = item.name end
