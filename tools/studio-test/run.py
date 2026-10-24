@@ -36,6 +36,7 @@ public class StudioWindow {
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+  [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
 }
 "@
 [StudioWindow]::SetProcessDPIAware() | Out-Null  # real pixels on a scaled display
@@ -43,14 +44,19 @@ $h = (Get-Process -Id __PID__).MainWindowHandle
 $r = New-Object StudioWindow+RECT
 if ($h -ne 0 -and [StudioWindow]::GetWindowRect($h, [ref]$r)) {
   $i = New-Object System.Drawing.Bitmap ($r.Right - $r.Left), ($r.Bottom - $r.Top)
-  [System.Drawing.Graphics]::FromImage($i).CopyFromScreen($r.Left, $r.Top, 0, 0, $i.Size)
+  $g = [System.Drawing.Graphics]::FromImage($i)
+  $hdc = $g.GetHdc()
+  # 2 = PW_RENDERFULLCONTENT: draws Studio's own window even when another window covers it
+  [StudioWindow]::PrintWindow($h, $hdc, 2) | Out-Null
+  $g.ReleaseHdc($hdc)
   $i.Save('__PATH__')
 }
 '''
 
 
 def screenshot(pid: int, path: Path) -> None:
-    """Capture only the Studio window this run opened, never the rest of the screen."""
+    """Capture only the Studio window this run opened, never the rest of the screen or a
+    window lying on top of it."""
     script = WINDOW_SHOT.replace("__PID__", str(pid)).replace("__PATH__", str(path))
     env = {k: v for k, v in os.environ.items() if k != "PSModulePath"}
     subprocess.run(["powershell.exe", "-NoProfile", "-Command", script], env=env, check=False)

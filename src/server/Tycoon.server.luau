@@ -182,18 +182,26 @@ local function pressValue(st: State, item: Config.Item): number
 	return value
 end
 
-local function incomePerMinute(st: State, lastingOnly: boolean?): number
-	local perMin, upgrade = 0, 1
+-- every gate stands downstream of every press (tools/balance.py checks it), so every part
+-- reaching scrutineering has passed every bought gate
+local function gateMultiplier(st: State): number
+	local m = 1
 	for _, item in Config.Items do
-		if st.data.bought[item.key] then
-			if item.kind == "press" then
-				perMin += pressValue(st, item) / pressInterval(st, item) * 60
-			elseif item.kind == "upgrade" then
-				upgrade *= item.mult :: number
-			end
+		if item.kind == "upgrade" and st.data.bought[item.key] then
+			m *= item.mult :: number
 		end
 	end
-	return perMin * upgrade * (lastingOnly and baseMultiplier(st) or multiplier(st))
+	return m
+end
+
+local function incomePerMinute(st: State, lastingOnly: boolean?): number
+	local perMin = 0
+	for _, item in Config.Items do
+		if item.kind == "press" and st.data.bought[item.key] then
+			perMin += pressValue(st, item) / pressInterval(st, item) * 60
+		end
+	end
+	return perMin * gateMultiplier(st) * (lastingOnly and baseMultiplier(st) or multiplier(st))
 end
 
 local function nextItemIndex(st: State): number?
@@ -312,10 +320,11 @@ local function spawnUpgrade(player: Player, item)
 	})
 	label(gate, item.name, LABEL_HIGH[item.key] and 5.6 or 4, Vector2.new(4.4, 1.3))
 	local tag = "U_" .. item.key
+	-- only the paint: a fast part can pass a gate between two physics steps without touching
+	-- it, so the gates' multipliers are paid at scrutineering instead (gateMultiplier)
 	gate.Touched:Connect(function(hit)
 		if hit.Parent == plot.drops and not hit:GetAttribute(tag) then
 			hit:SetAttribute(tag, true)
-			hit:SetAttribute("Value", (hit:GetAttribute("Value") or 0) * item.mult)
 			hit.Color = Color3.fromRGB(255, 120, 40)
 		end
 	end)
@@ -437,7 +446,7 @@ local function makePlot(index: number)
 	collector.Touched:Connect(function(hit)
 		if hit.Parent ~= plot.drops or not plot.owner then return end
 		local st = states[plot.owner]
-		local value = (hit:GetAttribute("Value") or 0) * (st and multiplier(st) or 1)
+		local value = (hit:GetAttribute("Value") or 0) * (st and gateMultiplier(st) * multiplier(st) or 1)
 		hit:Destroy()
 		if not st then return end
 		if st.passes.AutoCollect then
