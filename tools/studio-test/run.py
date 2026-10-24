@@ -77,7 +77,8 @@ def main() -> int:
         source = source.replace('local SCENARIO = "smoke"', 'local SCENARIO = "photo"', 1)
     PLUGIN.write_text(source, encoding="utf-8")
     started = time.time()
-    seen: dict[Path, int] = {}
+    # skip what is already in Studio's logs, or an earlier run's RESULT would be read as this one's
+    seen: dict[Path, int] = {log: log.stat().st_size for log in (ROBLOX / "logs").glob("*Studio*.log")}
     result = None
     studio = None
     try:
