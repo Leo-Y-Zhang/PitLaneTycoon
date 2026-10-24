@@ -496,7 +496,7 @@ local function assignPlot(player: Player)
 	return nil
 end
 
-Players.PlayerAdded:Connect(function(player)
+local function onPlayerAdded(player: Player)
 	local ls = Instance.new("Folder")
 	ls.Name = "leaderstats"
 	local cash = Instance.new("NumberValue")
@@ -534,7 +534,14 @@ Players.PlayerAdded:Connect(function(player)
 	end
 	player.CharacterAdded:Connect(toPlot)
 	if player.Character then toPlot(player.Character) end
-end)
+end
+Players.PlayerAdded:Connect(onPlayerAdded)
+-- anyone who joined while this script was still building the map
+for _, player in Players:GetPlayers() do
+	if not states[player] then
+		task.spawn(onPlayerAdded, player)
+	end
+end
 
 Players.PlayerRemoving:Connect(function(player)
 	local st = states[player]

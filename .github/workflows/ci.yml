@@ -30,6 +30,13 @@ jobs:
         run: find src -name '*.luau' -print0 | xargs -0 -n1 luau-compile > /dev/null
       - name: The place file builds
         run: rojo build default.project.json -o "$RUNNER_TEMP/PitLaneTycoon.rbxlx"
+      - name: Keep the place file for play-testing
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: PitLaneTycoon-place
+          path: ${{ runner.temp }}/PitLaneTycoon.rbxlx
+          if-no-files-found: error
+          retention-days: 14
       - name: Type-check against the Roblox API
         # The nearest thing to a play-test outside Studio: wrong property names, wrong
         # argument types and bad requires fail here.
@@ -38,6 +45,9 @@ jobs:
           luau-lsp analyze --platform=roblox --definitions="$RUNNER_TEMP/globalTypes.d.luau" --sourcemap=sourcemap.json src
   gitleaks:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read # the action lists a pull request's commits to scan them
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
