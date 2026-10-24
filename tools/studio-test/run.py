@@ -10,7 +10,6 @@ passed and the game logged no errors. Studio must be installed and signed in (Wi
 import argparse
 import json
 import os
-import shutil
 import subprocess
 import sys
 import time
@@ -61,13 +60,20 @@ def main() -> int:
     ap.add_argument("--shots", type=Path, help="save a screenshot of the Studio window here (it shows your avatar)")
     ap.add_argument("--timeout", type=int, default=420)
     ap.add_argument("--keep-open", action="store_true", help="leave the Studio window open afterwards")
+    ap.add_argument("--photos", action="store_true",
+                    help="take thumbnail shots of a finished garage instead of testing (needs --shots)")
     a = ap.parse_args()
     place = a.place.resolve()
     if not place.exists():
         sys.exit(f"no such place file: {place}")
 
     PLUGIN.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(HERE / "PitLaneSmokeTest.lua", PLUGIN)
+    source = (HERE / "PitLaneSmokeTest.lua").read_text(encoding="utf-8")
+    if a.photos:
+        if not a.shots:
+            sys.exit("--photos needs --shots DIR")
+        source = source.replace('local SCENARIO = "smoke"', 'local SCENARIO = "photo"', 1)
+    PLUGIN.write_text(source, encoding="utf-8")
     started = time.time()
     seen: dict[Path, int] = {}
     result = None
@@ -90,9 +96,10 @@ def main() -> int:
                         result = json.loads(text[len("RESULT "):])
                     else:
                         print(text, flush=True)
-                        if text == "SHOT" and a.shots:
+                        if text.startswith("SHOT") and a.shots:
                             a.shots.mkdir(parents=True, exist_ok=True)
-                            screenshot(studio.pid, a.shots / "studio-play.png")
+                            name = text[4:].strip() or "studio-play"
+                            screenshot(studio.pid, a.shots / f"{name}.png")
     finally:
         PLUGIN.unlink(missing_ok=True)
         # close only the Studio window this run opened

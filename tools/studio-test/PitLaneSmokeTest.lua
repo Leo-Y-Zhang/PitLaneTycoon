@@ -14,7 +14,7 @@ local StudioTestService = game:GetService("StudioTestService")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local TAG = "[PLT-TEST]"
-local SCENARIO = "smoke"
+local SCENARIO = "smoke" -- run.py --photos swaps in "photo"
 
 local function isPitLane(): boolean
 	if RunService:IsClient() and RunService:IsRunning() then
@@ -46,6 +46,9 @@ end
 if RunService:IsEdit() then
 	task.delay(8, function()
 		print(TAG, "START")
+		if SCENARIO == "photo" then
+			workspace:SetAttribute("PhotoMode", true) -- never saved: run.py closes Studio unsaved
+		end
 		local ok, result = pcall(function()
 			return StudioTestService:ExecutePlayModeAsync({ scenario = SCENARIO })
 		end)
@@ -64,8 +67,70 @@ if RunService:IsEdit() then
 	return
 end
 
+-- client, photo mode: hide the HUD and the avatar, then frame four thumbnail shots --------
+local function photoShoot()
+	local player = Players.LocalPlayer
+	pcall(function()
+		game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
+	end)
+	local hud = waitFor(function()
+		return player.PlayerGui:FindFirstChild("PitLaneHud")
+	end, 30)
+	if hud then
+		hud.Enabled = false
+	end
+	local plot = waitFor(function()
+		for _, model in workspace:WaitForChild("Plots"):GetChildren() do
+			local board = model:FindFirstChild("Sign") and model.Sign:FindFirstChildOfClass("BillboardGui")
+			local text = board and board:FindFirstChildOfClass("TextLabel")
+			if text and text.Text == "Your garage" then
+				return model
+			end
+		end
+		return nil
+	end, 30)
+	if not plot then
+		print(TAG, "PHOTO no garage found")
+		return
+	end
+	task.wait(6) -- let every press drop parts onto the line
+	local character = player.Character
+	if character then
+		for _, d in character:GetDescendants() do
+			if d:IsA("BasePart") or d:IsA("Decal") then
+				d.LocalTransparencyModifier = 1
+			end
+		end
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+		end
+	end
+	local base = (plot:FindFirstChild("Base") :: BasePart).CFrame
+	local cam = workspace.CurrentCamera
+	cam.CameraType = Enum.CameraType.Scriptable
+	cam.FieldOfView = 55
+	local shots = {
+		{ "hero", base * CFrame.new(-36, 22, -44), base * CFrame.new(4, 2, 6) },
+		{ "car", base * CFrame.new(-9, 4.5, 6), base * CFrame.new(2, 1.5, 15) },
+		{ "line", base * CFrame.new(-28, 5, -9), base * CFrame.new(14, 2.5, 1) },
+		{ "paddock", base * CFrame.new(0, 42, -86), base * CFrame.new(0, 3, 0) },
+	}
+	for _, shot in shots do
+		cam.CFrame = CFrame.lookAt(shot[2].Position, shot[3].Position)
+		task.wait(1.5)
+		print(TAG, "SHOT " .. shot[1])
+		task.wait(2.5)
+	end
+	print(TAG, "PHOTOS-DONE")
+end
+
 -- client: report the HUD and client-side errors -----------------------------------------
 if RunService:IsClient() then
+	if workspace:GetAttribute("PhotoMode") then
+		task.spawn(photoShoot)
+		return
+	end
 	LogService.MessageOut:Connect(function(message, kind)
 		if kind == Enum.MessageType.MessageError then
 			print(TAG, "CLIENT-ERROR " .. message)
@@ -99,6 +164,13 @@ local okArgs, args = pcall(function()
 	return StudioTestService:GetTestArgs()
 end)
 if not okArgs or type(args) ~= "table" or args.scenario ~= SCENARIO then
+	return
+end
+if SCENARIO == "photo" then
+	-- the client takes the pictures; the server only keeps the session open long enough
+	task.delay(45, function()
+		StudioTestService:EndTest({ passed = 0, total = 0, errors = {}, warnings = {} })
+	end)
 	return
 end
 
