@@ -35,8 +35,10 @@ using System; using System.Runtime.InteropServices;
 public class StudioWindow {
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
 }
 "@
+[StudioWindow]::SetProcessDPIAware() | Out-Null  # real pixels on a scaled display
 $h = (Get-Process -Id __PID__).MainWindowHandle
 $r = New-Object StudioWindow+RECT
 if ($h -ne 0 -and [StudioWindow]::GetWindowRect($h, [ref]$r)) {

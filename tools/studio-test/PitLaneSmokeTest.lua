@@ -106,13 +106,18 @@ local function photoShoot()
 			humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 		end
 	end
+	for _, gui in workspace:GetDescendants() do -- floating labels clutter a thumbnail
+		if gui:IsA("BillboardGui") then
+			gui.Enabled = false
+		end
+	end
 	local base = (plot:FindFirstChild("Base") :: BasePart).CFrame
 	local cam = workspace.CurrentCamera
 	cam.CameraType = Enum.CameraType.Scriptable
 	cam.FieldOfView = 55
 	local shots = {
-		{ "hero", base * CFrame.new(-14, 26, -54), base * CFrame.new(2, 2, 6) },
-		{ "car", base * CFrame.new(-2, 5, 5), base * CFrame.new(3, 1.6, 15) },
+		{ "hero", base * CFrame.new(-30, 14, -30), base * CFrame.new(0, 2, 6) },
+		{ "car", base * CFrame.new(-12, 6, 4), base * CFrame.new(2.5, 1.4, 15) },
 		{ "line", base * CFrame.new(-22, 6, -12), base * CFrame.new(12, 2.5, 2) },
 		{ "paddock", base * CFrame.new(0, 48, -100), base * CFrame.new(0, 2, -10) },
 	}
