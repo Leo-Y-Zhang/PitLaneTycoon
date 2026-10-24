@@ -170,7 +170,22 @@ local function run()
 	if not cash then
 		return
 	end
-	check("income starts at $60/min", player:GetAttribute("IncomePerMin") == 60, player:GetAttribute("IncomePerMin"))
+	-- weekend happy hour doubles income; the test can land in it
+	local happy = workspace:GetAttribute("HappyHour")
+	local x = happy and 2 or 1
+	check("the happy-hour flag is set", typeof(happy) == "boolean", happy)
+	check("income starts at $60/min", player:GetAttribute("IncomePerMin") == 60 * x, player:GetAttribute("IncomePerMin"))
+	check("no friends boost when playing alone", player:GetAttribute("FriendBoost") == 0, player:GetAttribute("FriendBoost"))
+	local board = workspace:FindFirstChild("Leaderboard")
+	local boardGui = board and board:FindFirstChildOfClass("SurfaceGui")
+	check("the leaderboard explains it needs publishing", boardGui and waitFor(function()
+		for _, label in boardGui:GetChildren() do
+			if label:IsA("TextLabel") and string.find(label.Text, "published") then
+				return true
+			end
+		end
+		return false
+	end, 10))
 	check("first press is built", plot.Items:FindFirstChild("press1"))
 
 	local character = waitFor(function()
@@ -229,7 +244,7 @@ local function run()
 		return plot.Items:FindFirstChild("press2")
 	end, 3))
 	check("it cost $60", cash.Value <= cashBefore - 60 + 15, ("%d -> %d"):format(cashBefore, cash.Value))
-	check("income rises to $210/min", player:GetAttribute("IncomePerMin") == 210, player:GetAttribute("IncomePerMin"))
+	check("income rises to $210/min", player:GetAttribute("IncomePerMin") == 210 * x, player:GetAttribute("IncomePerMin"))
 	local pad3 = plot:FindFirstChild("Buy_speed1") :: BasePart
 	check("the next pad lights up", pad3 and pad3.Transparency == 0 and pad3.CanTouch)
 	check("the bought pad goes dark", pad2.Transparency == 1 and not pad2.CanTouch)

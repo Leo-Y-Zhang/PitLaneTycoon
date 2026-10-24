@@ -30,8 +30,12 @@ Roblox keeps 30% of each sale. Change prices after a week of data, not before.
 
 1. **Before publishing:** play it solo in Studio for a full season; check that saving works
    once API access is on (leave and rejoin).
-2. **Publish**, fill in the Maturity & Compliance questionnaire (needed before it can be public),
-   and set the genre to Simulation/Tycoon.
+2. **Publish under a group, not your own account.** Create a group (Roblox > Groups > Create, 100
+   Robux) with a game-style name, never your real name, and publish the place to the group. The
+   game page then shows the group as the creator instead of your username (the group page still
+   lists its owner). Earnings land in group funds; pay them to yourself from the group's Revenue
+   page before DevEx. Fill in the Maturity & Compliance questionnaire (needed before it can be
+   public) and set the genre to Simulation/Tycoon.
 3. **Icon and thumbnails** matter more than anything else for clicks: a bright car on a
    conveyor, big readable title, no small text. Make 3 thumbnails and rotate them.
 4. **Create the passes and products**, paste the ids into `Config.luau`, rebuild, republish.
@@ -49,9 +53,19 @@ Roblox account, and have the DevEx portal and tax form set up. Under 18, a paren
 handles the tax and payment setup with you. Check the current rules on create.roblox.com
 before applying.
 
+## Built to bring players back (24 Oct 2026)
+
+- **Friends boost:** +10% earnings for each friend in the same server, up to +50%, shown in the
+  top bar. Players invite friends, which is how new games get found.
+- **Offline earnings:** coming back after 5 minutes or more pays 25% of the income rate at the
+  last save, for up to 8 hours away.
+- **Leaderboard** at the spawn: top 10 by factory earnings across all seasons (bought cash and
+  rewards don't count, so it can't be bought). The game's owner is never shown on it.
+- **Happy hour:** 2x earnings every Saturday and Sunday at 18:00 UTC (19:00 UK summer time,
+  18:00 in winter), so players gather at the same time. Mention it in the description.
+
 ## Next features (in order of expected impact)
 
-1. Leaderboard of seasons in the lobby (social proof).
+1. Better-looking garages and a showpiece car per plot, then the icon and thumbnails.
 2. A second plot theme unlocked in season 3 (keeps rebirthing fresh).
-3. Friends boost: +10% for each friend in the server (brings players' friends in).
-4. Limited-time weekend event with a 2x hour.
+3. More machines between the power-unit bench and the trophy (a longer first season).

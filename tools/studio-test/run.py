@@ -29,15 +29,28 @@ def studio_exe() -> Path:
     return found[-1]
 
 
-def screenshot(path: Path) -> None:
-    script = (
-        "Add-Type -AssemblyName System.Windows.Forms,System.Drawing;"
-        "$b=[System.Windows.Forms.SystemInformation]::VirtualScreen;"
-        "$i=New-Object System.Drawing.Bitmap $b.Width,$b.Height;"
-        "$g=[System.Drawing.Graphics]::FromImage($i);"
-        "$g.CopyFromScreen($b.Left,$b.Top,0,0,$i.Size);"
-        f"$i.Save('{path}');"
-    )
+WINDOW_SHOT = r'''
+Add-Type -AssemblyName System.Drawing
+Add-Type @"
+using System; using System.Runtime.InteropServices;
+public class StudioWindow {
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+}
+"@
+$h = (Get-Process -Id __PID__).MainWindowHandle
+$r = New-Object StudioWindow+RECT
+if ($h -ne 0 -and [StudioWindow]::GetWindowRect($h, [ref]$r)) {
+  $i = New-Object System.Drawing.Bitmap ($r.Right - $r.Left), ($r.Bottom - $r.Top)
+  [System.Drawing.Graphics]::FromImage($i).CopyFromScreen($r.Left, $r.Top, 0, 0, $i.Size)
+  $i.Save('__PATH__')
+}
+'''
+
+
+def screenshot(pid: int, path: Path) -> None:
+    """Capture only the Studio window this run opened, never the rest of the screen."""
+    script = WINDOW_SHOT.replace("__PID__", str(pid)).replace("__PATH__", str(path))
     env = {k: v for k, v in os.environ.items() if k != "PSModulePath"}
     subprocess.run(["powershell.exe", "-NoProfile", "-Command", script], env=env, check=False)
 
@@ -45,7 +58,7 @@ def screenshot(path: Path) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("place", type=Path)
-    ap.add_argument("--shots", type=Path, help="save desktop screenshots here during the test")
+    ap.add_argument("--shots", type=Path, help="save a screenshot of the Studio window here (it shows your avatar)")
     ap.add_argument("--timeout", type=int, default=420)
     ap.add_argument("--keep-open", action="store_true", help="leave the Studio window open afterwards")
     a = ap.parse_args()
@@ -61,15 +74,8 @@ def main() -> int:
     studio = None
     try:
         studio = subprocess.Popen([str(studio_exe()), str(place)])
-        shot = 0
-        next_shot = started + 45
         while time.time() - started < a.timeout and result is None:
             time.sleep(2)
-            if a.shots and time.time() >= next_shot and shot < 6:
-                a.shots.mkdir(parents=True, exist_ok=True)
-                shot += 1
-                screenshot(a.shots / f"studio-{shot}.png")
-                next_shot = time.time() + 20
             for log in (ROBLOX / "logs").glob("*Studio*.log"):
                 if log.stat().st_mtime < started - 5:
                     continue
@@ -86,7 +92,7 @@ def main() -> int:
                         print(text, flush=True)
                         if text == "SHOT" and a.shots:
                             a.shots.mkdir(parents=True, exist_ok=True)
-                            screenshot(a.shots / "studio-play.png")
+                            screenshot(studio.pid, a.shots / "studio-play.png")
     finally:
         PLUGIN.unlink(missing_ok=True)
         # close only the Studio window this run opened

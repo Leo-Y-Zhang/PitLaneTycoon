@@ -80,6 +80,13 @@ local function refreshTop()
 	if pending > 0 then
 		table.insert(parts, money(pending) .. " waiting at the blue pad")
 	end
+	local boost = player:GetAttribute("FriendBoost") or 0
+	if boost > 0 then
+		table.insert(parts, ("Friends +%d%%"):format(boost))
+	end
+	if workspace:GetAttribute("HappyHour") then
+		table.insert(parts, "2x happy hour")
+	end
 	table.insert(parts, "Season " .. ((player:GetAttribute("Season") or 0) + 1))
 	subLabel.Text = table.concat(parts, "   ")
 end
@@ -215,6 +222,7 @@ local function refreshAll()
 	seasonButton.Visible = player:GetAttribute("HasTrophy") == true
 end
 player.AttributeChanged:Connect(refreshAll)
+workspace:GetAttributeChangedSignal("HappyHour"):Connect(refreshTop)
 task.spawn(function()
 	local ls = player:WaitForChild("leaderstats")
 	ls:WaitForChild("Cash").Changed:Connect(refreshTop)

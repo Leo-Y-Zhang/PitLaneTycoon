@@ -21,6 +21,15 @@ do
 		warn("[PitLane] DataStore unavailable (publish the place and enable Studio API access): " .. tostring(result))
 	end
 end
+local board = nil -- the earnings leaderboard
+do
+	local ok, result = pcall(function()
+		return DataStoreService:GetOrderedDataStore(Config.LeaderboardName)
+	end)
+	if ok then
+		board = result
+	end
+end
 
 -- remotes ---------------------------------------------------------------------------
 local remotes = Instance.new("Folder")
@@ -85,22 +94,45 @@ local function money(n: number): string
 end
 
 -- player state ----------------------------------------------------------------------
-type Data = { cash: number, bought: { [string]: boolean }, season: number, lastDaily: number, streak: number, receipts: { [string]: boolean } }
-type State = { data: Data, plot: any?, pending: number, canSave: boolean, passes: { [string]: boolean }, dirty: boolean }
+type Data = {
+	cash: number, bought: { [string]: boolean }, season: number, lastDaily: number, streak: number,
+	receipts: { [string]: boolean }, earned: number, lastSeen: number, offlineRate: number,
+}
+type State = { data: Data, plot: any?, pending: number, canSave: boolean, passes: { [string]: boolean }, dirty: boolean, friends: number }
 local states: { [Player]: State } = {}
 
 local function freshData(): Data
-	return { cash = 0, bought = {}, season = 0, lastDaily = 0, streak = 0, receipts = {} }
+	return {
+		cash = 0, bought = {}, season = 0, lastDaily = 0, streak = 0, receipts = {},
+		earned = 0, lastSeen = 0, offlineRate = 0,
+	}
 end
 
-local function multiplier(st: State): number
+local function isHappyHour(): boolean
+	local t = os.date("!*t")
+	local h = Config.HappyHour
+	return table.find(h.days, t.wday) ~= nil and t.hour >= h.startHourUtc and t.hour < h.startHourUtc + h.hours
+end
+local happyHour = isHappyHour()
+workspace:SetAttribute("HappyHour", happyHour)
+
+-- seasons and passes: the lasting part of the multiplier (offline earnings use only this)
+local function baseMultiplier(st: State): number
 	local m = 1 + st.data.season * Config.SeasonBonus
 	if st.passes.DoubleCash then m *= 2 end
 	if st.passes.VIP then m *= 1.25 end
 	return m
 end
 
-local function incomePerMinute(st: State): number
+local function friendBoost(st: State): number
+	return math.min(st.friends, Config.FriendBoostMax) * Config.FriendBoost
+end
+
+local function multiplier(st: State): number
+	return baseMultiplier(st) * (1 + friendBoost(st)) * (happyHour and Config.HappyHour.mult or 1)
+end
+
+local function incomePerMinute(st: State, lastingOnly: boolean?): number
 	local perMin, upgrade = 0, 1
 	for _, item in Config.Items do
 		if st.data.bought[item.key] then
@@ -111,7 +143,7 @@ local function incomePerMinute(st: State): number
 			end
 		end
 	end
-	return perMin * upgrade * multiplier(st)
+	return perMin * upgrade * (lastingOnly and baseMultiplier(st) or multiplier(st))
 end
 
 local function publish(player: Player)
@@ -127,6 +159,7 @@ local function publish(player: Player)
 	player:SetAttribute("Season", st.data.season)
 	player:SetAttribute("SeasonCost", Config.SeasonCost(st.data.season))
 	player:SetAttribute("HasTrophy", st.data.bought.trophy == true)
+	player:SetAttribute("FriendBoost", math.floor(friendBoost(st) * 100 + 0.5))
 	for name in Config.Passes do
 		player:SetAttribute("Owns" .. name, st.passes[name] == true)
 	end
@@ -135,10 +168,13 @@ local function publish(player: Player)
 	end
 end
 
-local function addCash(player: Player, amount: number)
+local function addCash(player: Player, amount: number, fromFactory: boolean?)
 	local st = states[player]
 	if not st then return end
 	st.data.cash += amount
+	if fromFactory then
+		st.data.earned += amount -- only factory income counts for the leaderboard
+	end
 	st.dirty = true
 	publish(player)
 end
@@ -278,7 +314,7 @@ local function bankPending(player: Player)
 	if st and st.pending > 0 then
 		local amount = st.pending
 		st.pending = 0
-		addCash(player, amount)
+		addCash(player, amount, true)
 	end
 end
 
@@ -318,7 +354,7 @@ local function makePlot(index: number)
 		hit:Destroy()
 		if not st then return end
 		if st.passes.AutoCollect then
-			addCash(plot.owner, value)
+			addCash(plot.owner, value, true)
 		else
 			st.pending += value
 			publish(plot.owner)
@@ -373,6 +409,8 @@ part({ Name = "Paddock", Size = Vector3.new(2 * Config.PlotRadius + 140, 1, 2 * 
 local function save(player: Player)
 	local st = states[player]
 	if not st or not st.canSave or not store then return end
+	st.data.lastSeen = os.time()
+	st.data.offlineRate = incomePerMinute(st, true)
 	local snapshot = table.clone(st.data)
 	local ok, err = pcall(function()
 		store:UpdateAsync("u_" .. player.UserId, function()
@@ -383,6 +421,13 @@ local function save(player: Player)
 		st.dirty = false
 	else
 		warn("[PitLane] save failed for " .. player.Name .. ": " .. tostring(err))
+	end
+	-- the game's owner never appears on the public board
+	local isOwner = game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
+	if board and st.data.earned >= 1 and not isOwner then
+		pcall(function()
+			board:SetAsync("u_" .. player.UserId, math.floor(st.data.earned))
+		end)
 	end
 end
 
@@ -484,6 +529,112 @@ local function dailyReward(player: Player, st: State)
 	notify:FireClient(player, ("Day %d streak: +%s"):format(st.data.streak, money(reward)))
 end
 
+local function offlineEarnings(player: Player, st: State)
+	local away = os.time() - st.data.lastSeen
+	if st.data.lastSeen <= 0 or away < Config.Offline.minMinutes * 60 then return end
+	local minutes = math.min(away / 60, Config.Offline.capHours * 60)
+	local amount = math.floor(st.data.offlineRate * minutes * Config.Offline.share)
+	if amount <= 0 then return end
+	addCash(player, amount)
+	task.delay(3, function() -- after the daily-reward message
+		notify:FireClient(player, "Your factory made " .. money(amount) .. " while you were away")
+	end)
+end
+
+-- friends boost ---------------------------------------------------------------------
+local friendCache: { [string]: boolean } = {}
+local function areFriends(a: Player, b: Player): boolean
+	local lo, hi = math.min(a.UserId, b.UserId), math.max(a.UserId, b.UserId)
+	local key = lo .. ":" .. hi
+	if friendCache[key] == nil then
+		local ok, result = pcall(function()
+			return a:IsFriendsWith(b.UserId)
+		end)
+		if not ok then return false end -- ask again next time
+		friendCache[key] = result
+	end
+	return friendCache[key]
+end
+
+local function refreshFriends()
+	for player, st in states do
+		task.spawn(function()
+			local count = 0
+			for _, other in Players:GetPlayers() do
+				if other ~= player and areFriends(player, other) then
+					count += 1
+				end
+			end
+			if states[player] == st and st.friends ~= count then
+				st.friends = count
+				publish(player)
+			end
+		end)
+	end
+end
+
+-- leaderboard -----------------------------------------------------------------------
+local boardRows: { TextLabel } = {}
+do
+	local boardPart = part({ Name = "Leaderboard", Size = Vector3.new(18, 12, 1), CFrame = CFrame.new(0, 6.5, -14),
+		Color = Color3.fromRGB(17, 20, 24), Material = Enum.Material.SmoothPlastic, Parent = workspace })
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Back -- faces the spawn
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 40
+	gui.Parent = boardPart
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(1, 0, 0, 80)
+	title.BackgroundColor3 = Color3.fromRGB(225, 38, 28)
+	title.Font = Enum.Font.GothamBlack
+	title.TextScaled = true
+	title.TextColor3 = Color3.new(1, 1, 1)
+	title.Text = "Top constructors"
+	title.Parent = gui
+	for i = 1, Config.LeaderboardSize do
+		local row = Instance.new("TextLabel")
+		row.Position = UDim2.new(0, 24, 0, 80 + (i - 1) * 38)
+		row.Size = UDim2.new(1, -48, 0, 36)
+		row.BackgroundTransparency = 1
+		row.Font = Enum.Font.GothamBold
+		row.TextScaled = true
+		row.TextXAlignment = Enum.TextXAlignment.Left
+		row.TextColor3 = Color3.fromRGB(245, 246, 248)
+		row.Text = ""
+		row.Parent = gui
+		boardRows[i] = row
+	end
+end
+
+local nameCache: { [number]: string } = {}
+local function refreshBoard()
+	local ok, page = false, nil
+	if board then
+		ok, page = pcall(function()
+			return board:GetSortedAsync(false, Config.LeaderboardSize):GetCurrentPage()
+		end)
+	end
+	if not ok then
+		boardRows[1].Text = "Appears once the game is published"
+		return
+	end
+	for i, row in boardRows do
+		local entry = page[i]
+		if entry then
+			local userId = tonumber(string.sub(entry.key, 3)) or 0
+			if not nameCache[userId] then
+				local okName, name = pcall(function()
+					return Players:GetNameFromUserIdAsync(userId)
+				end)
+				nameCache[userId] = okName and name or "Racer"
+			end
+			row.Text = ("%d. %s   %s"):format(i, nameCache[userId], money(entry.value))
+		else
+			row.Text = ""
+		end
+	end
+end
+
 -- joining and leaving ---------------------------------------------------------------
 local function assignPlot(player: Player)
 	for _, plot in plots do
@@ -509,7 +660,7 @@ local function onPlayerAdded(player: Player)
 
 	local data, canSave = load(player)
 	if not player.Parent then return end
-	local st: State = { data = data, plot = nil, pending = 0, canSave = canSave, passes = {}, dirty = false }
+	local st: State = { data = data, plot = nil, pending = 0, canSave = canSave, passes = {}, dirty = false, friends = 0 }
 	states[player] = st
 	checkPasses(player, st)
 	st.data.bought[Config.Items[1].key] = true -- the first press is free
@@ -524,6 +675,8 @@ local function onPlayerAdded(player: Player)
 		notify:FireClient(player, "Saving is unavailable right now; progress this visit may not save.")
 	end
 	dailyReward(player, st)
+	offlineEarnings(player, st)
+	refreshFriends()
 
 	local function toPlot(character: Model)
 		task.defer(function()
@@ -560,6 +713,7 @@ Players.PlayerRemoving:Connect(function(player)
 		end
 	end
 	states[player] = nil
+	refreshFriends()
 end)
 
 game:BindToClose(function()
@@ -568,6 +722,30 @@ game:BindToClose(function()
 		task.spawn(save, player)
 	end
 	task.wait(3)
+end)
+
+task.spawn(function()
+	while true do
+		refreshBoard()
+		task.wait(Config.LeaderboardRefreshSeconds)
+	end
+end)
+
+task.spawn(function()
+	while true do
+		task.wait(30)
+		local now = isHappyHour()
+		if now ~= happyHour then
+			happyHour = now
+			workspace:SetAttribute("HappyHour", now)
+			for player in states do
+				publish(player)
+				if now then
+					notify:FireClient(player, "Happy hour! Everything earns 2x for the next hour")
+				end
+			end
+		end
+	end
 end)
 
 task.spawn(function()
