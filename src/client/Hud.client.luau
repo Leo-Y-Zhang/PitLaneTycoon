@@ -66,8 +66,10 @@ local cashLabel = new("TextLabel", {
 }, top)
 local subLabel = new("TextLabel", {
 	Size = UDim2.new(1, -20, 0, 20), Position = UDim2.fromOffset(10, 38), BackgroundTransparency = 1,
-	Font = Enum.Font.Gotham, TextSize = 15, TextColor3 = INK, Text = "",
+	Font = Enum.Font.Gotham, TextScaled = true, TextColor3 = INK, Text = "",
 }, top)
+-- shrink a long line ("$11 waiting at the blue pad") to fit the bar instead of spilling out
+new("UITextSizeConstraint", { MaxTextSize = 15 }, subLabel)
 
 local function refreshTop()
 	local ls = player:FindFirstChild("leaderstats")
