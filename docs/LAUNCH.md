@@ -9,9 +9,13 @@ earn nothing until they are discovered, so the plan below is about retention fir
 
 - **The core loop pays every few seconds** (presses → conveyor → cash), and the next purchase pad
   is always the one glowing, so players never wonder what to do.
+- **A first season of about an hour** (24 purchases, none longer than 8 minutes; check with
+  `python tools/balance.py`), then shorter seasons that each add machines.
 - **Retention:** new seasons (rebirth) with a permanent multiplier, and a daily streak (day 7
-  pays 80x day 1). These are the levers that bring players back, which is what Roblox's
-  recommendations reward.
+  pays $8,000 times the season multiplier or 20 minutes of income, whichever is more). These
+  are the levers that bring players back, which is what Roblox's recommendations reward.
+- **Phones first:** most Roblox players are on phones, so the HUD shrinks to fit a phone held
+  sideways and keeps its buttons clear of the thumbstick.
 - **Monetisation that does not block free players:** passes speed things up; nothing is locked.
 
 ## Prices to start with (Robux)
@@ -35,7 +39,8 @@ Roblox keeps 30% of each sale. Change prices after a week of data, not before.
    game page then shows the group as the creator instead of your username (the group page still
    lists its owner). Earnings land in group funds; pay them to yourself from the group's Revenue
    page before DevEx. Fill in the Maturity & Compliance questionnaire (needed before it can be
-   public) and set the genre to Simulation/Tycoon.
+   public) and set the genre to Simulation/Tycoon. Set the place's **Max Players to 6**: there
+   are six garages, and a seventh player would have none.
 3. **Icon and thumbnails** matter more than anything else for clicks: a bright car on a
    conveyor, big readable title, no small text. Ready-made ones are in `marketing/`
    (`icon.png` 512x512, `thumbnail-1..3.png` 1280x720); upload all three thumbnails so Roblox
@@ -71,4 +76,8 @@ before applying.
 ## Next features (in order of expected impact)
 
 1. A second plot theme unlocked in season 3 (keeps rebirthing fresh).
-2. More machines between the power-unit bench and the trophy (a longer first season).
+2. Session locking, so a player who hops servers within seconds can't load a save that the old
+   server has not finished writing (rare; matters once there is real traffic).
+
+Done 24 Oct 2026: a longer first season (11 purchases became 24), machines that only appear in
+later seasons, and a HUD built for phones.
