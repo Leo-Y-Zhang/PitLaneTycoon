@@ -9,6 +9,10 @@ local Debris = game:GetService("Debris")
 local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Scenery = require(script.Parent:WaitForChild("Scenery"))
+-- Studio only: a finished garage with no username on show, for thumbnails (tools/studio-test)
+local PHOTO_MODE = RunService:IsStudio() and workspace:GetAttribute("PhotoMode") == true
+Scenery.lighting()
 
 local store = nil
 do
@@ -283,6 +287,7 @@ local function rebuildPlot(player: Player)
 	local plot = st.plot
 	plot.items:ClearAllChildren()
 	plot.drops:ClearAllChildren()
+	Scenery.car(plot.items, at(plot, 2, 0, 15) * CFrame.Angles(0, math.rad(90), 0), plot.team.colour, st.data.season)
 	plot.conveyor.AssemblyLinearVelocity = plot.cf.RightVector * conveyorSpeed(st)
 	for _, item in Config.Items do
 		if st.data.bought[item.key] then
@@ -321,7 +326,7 @@ end
 local function makePlot(index: number)
 	local angle = (index - 1) / Config.PlotCount * math.pi * 2
 	local centre = Vector3.new(math.cos(angle), 0, math.sin(angle)) * Config.PlotRadius
-	local plot = { index = index, owner = nil :: Player?, pads = {} }
+	local plot = { index = index, owner = nil :: Player?, pads = {}, team = Scenery.Teams[(index - 1) % #Scenery.Teams + 1] }
 	plot.cf = CFrame.lookAt(centre, Vector3.new(0, 0, 0)) -- local -Z faces the spawn
 	local model = Instance.new("Model")
 	model.Name = "Plot" .. index
@@ -330,7 +335,8 @@ local function makePlot(index: number)
 	part({ Name = "Base", Size = Vector3.new(64, 1, 52), CFrame = at(plot, 0, -0.5, 0),
 		Color = Color3.fromRGB(46, 52, 58), Material = Enum.Material.Concrete, Parent = model })
 	local sign = part({ Name = "Sign", Size = Vector3.new(14, 4, 1), CFrame = at(plot, 0, 3, -25.5),
-		Color = Color3.fromRGB(20, 24, 28), Parent = model })
+		Color = plot.team.colour, Parent = model })
+	Scenery.garage(model, plot.cf, plot.team)
 	plot.signLabel = label(sign, "Free garage", 3)
 	plot.conveyor = part({ Name = "Conveyor", Size = Vector3.new(48, 1, 6), CFrame = at(plot, 0, 1, 0),
 		Color = Color3.fromRGB(30, 30, 30), Material = Enum.Material.DiamondPlate, Parent = model })
@@ -404,6 +410,7 @@ spawnPad.Parent = workspace
 -- the paddock: one ground plane under the spawn and every garage
 part({ Name = "Paddock", Size = Vector3.new(2 * Config.PlotRadius + 140, 1, 2 * Config.PlotRadius + 140),
 	CFrame = CFrame.new(0, -0.6, 0), Color = Color3.fromRGB(84, 92, 98), Material = Enum.Material.Asphalt, Parent = workspace })
+Scenery.paddock(Config.PlotCount, Config.PlotRadius, 26)
 
 -- saving ----------------------------------------------------------------------------
 local function save(player: Player)
@@ -664,10 +671,19 @@ local function onPlayerAdded(player: Player)
 	states[player] = st
 	checkPasses(player, st)
 	st.data.bought[Config.Items[1].key] = true -- the first press is free
+	if PHOTO_MODE then
+		for _, item in Config.Items do
+			st.data.bought[item.key] = true
+		end
+		st.data.season = 1
+	end
 	st.plot = assignPlot(player)
 	if not st.plot then
 		notify:FireClient(player, "This server is full of teams. Try another server.")
 		return
+	end
+	if PHOTO_MODE then
+		st.plot.signLabel.Text = "Your garage"
 	end
 	rebuildPlot(player)
 	publish(player)
