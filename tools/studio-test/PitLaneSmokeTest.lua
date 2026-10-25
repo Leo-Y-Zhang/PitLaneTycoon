@@ -246,6 +246,14 @@ local function photoShoot()
 		task.wait(2.5)
 		hold:Disconnect()
 	end
+	local shelf = plot:FindFirstChild("Items") and plot.Items:FindFirstChild("Shelf")
+	if shelf then -- the collection case
+		cam.CameraType = Enum.CameraType.Scriptable
+		cam.CFrame = CFrame.lookAt((base * CFrame.new(-7, 4.5, 15)).Position, (base * CFrame.new(-12, 2, 23.2)).Position)
+		task.wait(1.5)
+		print(TAG, "SHOT shelf")
+		task.wait(2.5)
+	end
 	for _, model in workspace.Plots:GetChildren() do -- the night look, built next door in photo mode
 		if model:GetAttribute("Theme") == "night" then
 			local nb = (model:FindFirstChild("Base") :: BasePart).CFrame
@@ -939,6 +947,12 @@ local function run()
 	local goldValue = gold and gold:GetAttribute("Value") or 0
 	-- the line has the Bolt press ($2 a part) and the Bracket press ($5) so far
 	check("worth five times a normal part", goldValue == 10 or goldValue == 25, goldValue)
+
+	check("a collected Gold part goes into the team's collection case", waitFor(function()
+		return (player:GetAttribute("RareGold") or 0) >= 1 and plot.Items:FindFirstChild("Shelf")
+	end, 10), player:GetAttribute("RareGold"))
+	local likePrompt = plot:FindFirstChild("Sign") and plot.Sign:FindFirstChild("Like")
+	check("other teams can like the garage at its sign", likePrompt and likePrompt:IsA("ProximityPrompt"))
 
 	-- leave the character somewhere visible for a screenshot
 	character:PivotTo(base.CFrame * CFrame.new(-8, 4, -14) * CFrame.Angles(0, math.rad(200), 0))
