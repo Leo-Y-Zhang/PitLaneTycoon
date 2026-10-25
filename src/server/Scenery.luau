@@ -320,7 +320,7 @@ function Scenery.shelf(parent: Instance, cf: CFrame, gold: number, rainbow: numb
 			Color3.fromRGB(255, 70, 210), Enum.Material.Neon)
 		gem.Shape = Enum.PartType.Ball
 	end
-	sign(plinth, Enum.NormalId.Back, ("RARE PARTS  %d GOLD  %d RAINBOW"):format(gold, rainbow), Color3.fromRGB(255, 205, 60))
+	sign(plinth, Enum.NormalId.Front, ("RARE PARTS  %d GOLD  %d RAINBOW"):format(gold, rainbow), Color3.fromRGB(255, 205, 60))
 	m.Parent = parent
 	return m
 end
