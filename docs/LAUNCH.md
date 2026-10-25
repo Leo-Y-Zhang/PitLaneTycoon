@@ -92,6 +92,13 @@ before applying.
   rewards don't count, so it can't be bought). The game's owner is never shown on it.
 - **Happy hour:** 2x earnings every Saturday and Sunday at 18:00 UTC (19:00 UK summer time,
   18:00 in winter), so players gather at the same time. Mention it in the description.
+- **Rare parts and live events (25 Oct 2026),** after what the biggest Roblox games do
+  (Grow a Garden's mutations, Steal a Brainrot's rare finds, frequent server-wide events). Now
+  and then a press stamps a Gold (5x, 1 in 60) or Rainbow (25x, 1 in 600) part that glows down
+  the line; a Rainbow is announced to the whole server. Every 12 minutes the server gets a live
+  event for everyone at once: Safety car (every part pays double for 90 s) or Gold rush (rare
+  parts five times as likely for 2 min), on a chequered strip under the top bar. Rare parts add
+  about 11% to income on average; `tests/Rarity.spec.luau` keeps it between 5 and 15%.
 - **A welcome card (25 Oct 2026):** a first visit opens with three lines on how the game works
   (the conveyor earns, bank on the blue pad and buy on the red, Race any time) until the player
   presses Let's go or buys their first machine. The guide line, the Next bar and the first goal

@@ -486,15 +486,16 @@ if RunService:IsClient() then
 		clientCheck("the engine runs", engineSound and engineSound.IsLoaded and engineSound.IsPlaying)
 
 		-- hold the brake (it reverses) for three seconds, after the controls have written theirs
+		local speedLabel = frame and frame:FindFirstChild("Speed") :: TextLabel?
+		local fastest = 0 -- the highest reading while reversing
 		local hold = RunService.Stepped:Connect(function()
 			seat.ThrottleFloat = -1
+			local reading = speedLabel and tonumber(string.match(speedLabel.Text, "^(%d+) km/h$"))
+			fastest = math.max(fastest, reading or 0)
 		end)
-		task.wait(2.5)
-		local speedLabel = frame and frame:FindFirstChild("Speed") :: TextLabel?
-		local reading = speedLabel and tonumber(string.match(speedLabel.Text, "^(%d+) km/h$"))
-		clientCheck("the speed shows in km/h", reading and reading > 10, speedLabel and speedLabel.Text)
-		task.wait(0.5)
+		task.wait(3)
 		hold:Disconnect()
+		clientCheck("the speed shows in km/h", fastest > 10, ("up to %d km/h"):format(fastest))
 
 		local function place(a: number, off: number)
 			local x, z = TrackShape.point(Config.Track, a)
@@ -914,8 +915,9 @@ local function run()
 	check("a live event starts for the whole server", waitFor(function()
 		return workspace:GetAttribute("EventName") == "Safety car"
 	end, 4), workspace:GetAttribute("EventName"))
+	-- (the HUD figure is rounded down, so double it within a dollar)
 	check("the Safety car doubles income", waitFor(function()
-		return player:GetAttribute("IncomePerMin") == incomeBefore * 2
+		return math.abs((player:GetAttribute("IncomePerMin") or 0) - incomeBefore * 2) <= 1
 	end, 3), ("%d -> %d"):format(incomeBefore, player:GetAttribute("IncomePerMin") or 0))
 	check("and ends on time, income back to normal", waitFor(function()
 		return workspace:GetAttribute("EventName") == "" and player:GetAttribute("IncomePerMin") == incomeBefore

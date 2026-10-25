@@ -14,7 +14,8 @@ walls and team colours that glow.
 
 A goal panel always shows the next thing to aim for (bank, buy, lap, earn, beat a lap time,
 win the trophy, start a season) and pays when it is met; a gift waits every 10 minutes played;
-codes typed in the shop pay once each.
+codes typed in the shop pay once each. Rare Gold and Rainbow parts turn up on the line, and every
+12 minutes the whole server gets a live event (Safety car, Gold rush).
 
 Between purchases, take your team's car out on the time-trial track round the paddock (the
 Race button, or Drive at the show car). The server times every lap, a clean lap pays, and the
