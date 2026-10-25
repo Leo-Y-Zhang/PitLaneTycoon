@@ -7,6 +7,10 @@ hour) you win the Constructors' trophy and can start a new season: the garage re
 season adds +50% to all earnings for good, and seasons 2 and 3 bring machines the first one
 never had.
 
+The garage builds itself as you go: a free plot is a building site, and every few purchases
+another piece rises out of the floor, from the epoxy floor and walls to floodlights, a pit wall
+and an upper deck with a glass front.
+
 Between purchases, take your team's car out on the time-trial track round the paddock (the
 Race button, or Drive at the show car). The server times every lap, a clean lap pays, and the
 fastest laps go on a board at the spawn. The car gets faster every season.
@@ -36,6 +40,7 @@ in [docs/LAUNCH.md](docs/LAUNCH.md).
 | How long each purchase and season takes | `python tools/balance.py` (reads the config) |
 | The map, the production line, money, saving, purchases | `src/server/Tycoon.server.luau` |
 | Session-locked saves (no lost progress on a server hop) | `src/server/SaveLock.luau` |
+| Which garage pieces are up / how each piece looks | `src/server/GaragePlan.luau` (plan in `Config.GaragePieces`) / `src/server/Scenery.luau` |
 | The track's shape, the car's handling, lap timing | `src/shared/TrackShape.luau`, `src/shared/DriveModel.luau`, `src/server/LapTimer.luau` |
 | Cars, the prompt, sampling laps / steering the car | `src/server/Racing.luau` / `src/client/Drive.client.luau` |
 | Funnel and economy events for the Creator Dashboard | `src/server/Analytics.luau` |
@@ -47,4 +52,4 @@ Live-sync while editing: `rojo serve`, with the Rojo plugin connected in Studio.
 CI checks that every Luau file compiles and type-checks against the Roblox API, that the place
 file builds, that the pacing holds (the first season takes 45-90 minutes and no purchase
 more than 8, `tools/balance.py`), and runs the Luau tests in `tests/` (save locking; the
-track, the car's handling and lap timing).
+track, the car's handling and lap timing; the garage plan).
