@@ -50,6 +50,7 @@ in [docs/LAUNCH.md](docs/LAUNCH.md).
 | Cars, the prompt, sampling laps / steering the car | `src/server/Racing.luau` / `src/client/Drive.client.luau` |
 | Funnel and economy events for the Creator Dashboard | `src/server/Analytics.luau` |
 | The on-screen HUD and shop | `src/client/Hud.client.luau` |
+| Music, sounds, settings, button feel / where panels go on each screen | `src/client/Polish.client.luau` / `src/shared/Layout.luau` |
 
 Build the place file: `rojo build default.project.json -o PitLaneTycoon.rbxlx`.
 Live-sync while editing: `rojo serve`, with the Rojo plugin connected in Studio.
@@ -57,4 +58,9 @@ Live-sync while editing: `rojo serve`, with the Rojo plugin connected in Studio.
 CI checks that every Luau file compiles and type-checks against the Roblox API, that the place
 file builds, that the pacing holds (the first season takes 45-90 minutes and no purchase
 more than 8, `tools/balance.py`), and runs the Luau tests in `tests/` (save locking; the
-track, the car's handling and lap timing; the garage plan; goals and codes).
+track, the car's handling and lap timing; the garage plan; goals and codes; the HUD layout on
+phones and computer windows).
+
+Sounds and music come only from Roblox-licensed libraries (APM Music, Pro Sound Effects), listed
+in `Config.Audio`. `python tools/studio-test/run.py PitLaneTycoon.rbxlx --audio` checks every id
+belongs to one of them, and lists more to choose from.
