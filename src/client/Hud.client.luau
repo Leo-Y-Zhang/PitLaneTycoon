@@ -394,6 +394,15 @@ end
 
 -- to the red pad when the next item is affordable, to the blue pad when the cash waiting
 -- there would cover it, and nowhere while the factory is still earning
+-- the like prompt on your own garage's sign is for other players
+local function hideOwnLike()
+	local plot = myPlot()
+	local prompt = plot and plot:FindFirstChild("Sign") and plot.Sign:FindFirstChild("Like")
+	if prompt then
+		(prompt :: ProximityPrompt).Enabled = false
+	end
+end
+
 local function refreshGuide()
 	local plot = myPlot()
 	local character = player.Character
@@ -601,6 +610,7 @@ local function refreshAll()
 	refreshGoal()
 	refreshGift()
 	welcome.Visible = player:GetAttribute("Welcome") == true
+	hideOwnLike()
 end
 player.AttributeChanged:Connect(refreshAll)
 workspace:GetAttributeChangedSignal("HappyHour"):Connect(refreshTop)

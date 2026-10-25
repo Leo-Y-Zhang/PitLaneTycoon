@@ -119,6 +119,10 @@ Config.Events = {
 	},
 }
 
+-- Garage likes (src/server/Likes.luau): once a day each player may like another team's garage
+-- at its sign; the liked team gets `minutes` of its income (at least `floor` times its multiplier).
+Config.Likes = { minutes = 1, floor = 50 }
+
 Config.BaseConveyorSpeed = 9
 Config.PartLifetime = 25 -- seconds before an uncollected part is cleared
 

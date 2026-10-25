@@ -304,6 +304,27 @@ function Scenery.press(parent: Instance, cf: CFrame, name: string, colour: Color
 	return head, die
 end
 
+-- the collection case at the back of the garage: a gold bar for each Gold part stamped and a
+-- gem for each Rainbow (up to six of each on show), with the totals on the plinth
+function Scenery.shelf(parent: Instance, cf: CFrame, gold: number, rainbow: number): Model
+	local m = Instance.new("Model")
+	m.Name = "Shelf"
+	local plinth = block(m, cf * CFrame.new(0, 0.5, 0), Vector3.new(9, 1, 1.8), CARBON, Enum.Material.Metal)
+	local case = block(m, cf * CFrame.new(0, 2.5, 0), Vector3.new(9, 3, 1.8), Color3.fromRGB(190, 220, 240), Enum.Material.Glass)
+	case.Transparency = 0.7
+	for i = 1, math.min(gold, 6) do
+		block(m, cf * CFrame.new(-3.75 + (i - 1) * 1.5, 1.35, 0), Vector3.new(1, 0.45, 0.6), Color3.fromRGB(255, 196, 40), Enum.Material.Neon)
+	end
+	for i = 1, math.min(rainbow, 6) do
+		local gem = block(m, cf * CFrame.new(-3.75 + (i - 1) * 1.5, 2.6, 0), Vector3.new(0.75, 0.75, 0.75),
+			Color3.fromRGB(255, 70, 210), Enum.Material.Neon)
+		gem.Shape = Enum.PartType.Ball
+	end
+	sign(plinth, Enum.NormalId.Back, ("RARE PARTS  %d GOLD  %d RAINBOW"):format(gold, rainbow), Color3.fromRGB(255, 205, 60))
+	m.Parent = parent
+	return m
+end
+
 -- a show car built from parts; gold trim from season 2, a gold livery from season 4
 function Scenery.car(parent: Instance, cf: CFrame, colour: Color3, season: number, driver: boolean?): Model
 	local car = Instance.new("Model")

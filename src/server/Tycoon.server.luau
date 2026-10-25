@@ -18,6 +18,7 @@ local GaragePlan = require(script.Parent:WaitForChild("GaragePlan"))
 local Goals = require(script.Parent:WaitForChild("Goals"))
 local Codes = require(script.Parent:WaitForChild("Codes"))
 local Rarity = require(script.Parent:WaitForChild("Rarity"))
+local Likes = require(script.Parent:WaitForChild("Likes"))
 local Analytics = require(script.Parent:WaitForChild("Analytics"))
 -- this server's name on a save lock (Studio has no JobId)
 local JOB = game.JobId ~= "" and game.JobId or ("studio-" .. HttpService:GenerateGUID(false))
@@ -145,6 +146,8 @@ type Data = {
 	goal: number, banks: number, codes: { [string]: boolean }, -- the next goal (Config.Goals), times banked, codes used
 	settings: { music: boolean, sfx: boolean },
 	welcomed: boolean, -- has seen the first-visit card
+	rares: { [string]: number }, -- rare parts collected, all seasons (the garage's case shows them)
+	likes: number, likedOn: { [string]: number }, -- likes this garage has had; whose garages this player liked today
 }
 type State = {
 	data: Data, plot: any?, pending: number, canSave: boolean, passes: { [string]: boolean }, dirty: boolean, friends: number,
@@ -159,6 +162,7 @@ local function freshData(): Data
 		cash = 0, bought = {}, season = 0, lastDaily = 0, streak = 0, receipts = {},
 		earned = 0, lastSeen = 0, offlineRate = 0, funnel = 0, bestLap = 0, laps = 0, bestLapReverse = 0,
 		goal = 1, banks = 0, codes = {}, settings = { music = true, sfx = true }, welcomed = false,
+		rares = {}, likes = 0, likedOn = {},
 	}
 end
 
@@ -301,6 +305,9 @@ local function publish(player: Player)
 	player:SetAttribute("GiftAt", st.giftAt)
 	player:SetAttribute("MusicOn", st.data.settings.music ~= false)
 	player:SetAttribute("Welcome", not st.data.welcomed)
+	player:SetAttribute("RareGold", st.data.rares.Gold or 0)
+	player:SetAttribute("RareRainbow", st.data.rares.Rainbow or 0)
+	player:SetAttribute("Likes", st.data.likes)
 	player:SetAttribute("SfxOn", st.data.settings.sfx ~= false)
 	for name in Config.Passes do
 		player:SetAttribute("Owns" .. name, st.passes[name] == true)
@@ -519,11 +526,36 @@ local function refreshGarage(plot, st: State?, animate: boolean?)
 	end
 end
 
+-- the collection case, once the team has a rare part to show
+local function refreshShelf(plot, st: State)
+	local old = plot.items:FindFirstChild("Shelf")
+	if old then
+		old:Destroy()
+	end
+	local gold, rainbow = st.data.rares.Gold or 0, st.data.rares.Rainbow or 0
+	if gold + rainbow > 0 then
+		Scenery.shelf(plot.items, at(plot, -12, 0, 23.2), gold, rainbow)
+	end
+end
+
+-- the name board: the team's name and its likes
+local function refreshSign(plot, st: State?)
+	local owner = plot.owner
+	if not (owner and st) then
+		plot.signLabel.Text = "Free garage"
+	elseif PHOTO_MODE then
+		plot.signLabel.Text = "Your garage"
+	else
+		plot.signLabel.Text = owner.DisplayName .. "'s garage" .. (st.data.likes > 0 and ("  ♥ " .. st.data.likes) or "")
+	end
+end
+
 local function rebuildPlot(player: Player)
 	local st = states[player]
 	local plot = st.plot
 	refreshGarage(plot, st)
 	plot.items:ClearAllChildren()
+	refreshShelf(plot, st)
 	plot.drops:ClearAllChildren()
 	plot.pressLabels = {}
 	local car = Scenery.car(plot.items, at(plot, 2, 0, 15) * CFrame.Angles(0, math.rad(90), 0), plot.team.colour, st.data.season,
@@ -621,6 +653,35 @@ local function makePlot(index: number)
 	plot.garage.Parent = model
 	refreshGarage(plot, nil)
 	plot.signLabel = label(sign, "Free garage", 3)
+	-- other teams can like this garage, once a day each (the owner's own screen hides the prompt)
+	local like = Instance.new("ProximityPrompt")
+	like.Name = "Like"
+	like.ActionText = "Like"
+	like.ObjectText = "This garage"
+	like.HoldDuration = 0
+	like.MaxActivationDistance = 14
+	like.RequiresLineOfSight = false
+	like.Parent = sign
+	like.Triggered:Connect(function(liker)
+		local owner = plot.owner
+		local st, mine = owner and states[owner], states[liker]
+		if not (owner and st and mine) then return end
+		local today = Likes.day(os.time())
+		if not Likes.can(liker.UserId, owner.UserId, mine.data.likedOn, today) then
+			notify:FireClient(liker, liker == owner and "That's your own garage!" or "You've liked this garage today")
+			return
+		end
+		Likes.record(owner.UserId, mine.data.likedOn, today)
+		mine.dirty = true
+		st.data.likes += 1
+		st.dirty = true
+		local reward = rewardOf(st, Config.Likes.minutes, Config.Likes.floor)
+		addCash(owner, reward)
+		effect:FireClient(owner, "banked", reward)
+		notify:FireClient(owner, liker.DisplayName .. " liked your garage! +" .. money(reward))
+		notify:FireClient(liker, "You liked " .. owner.DisplayName .. "'s garage")
+		refreshSign(plot, st)
+	end)
 	plot.conveyor = part({ Name = "Conveyor", Size = Vector3.new(48, 1, 6), CFrame = at(plot, 0, 1, 0),
 		Color = Color3.fromRGB(30, 30, 30), Material = Enum.Material.DiamondPlate, Parent = model })
 	local collector = part({ Name = "Scrutineering", Size = Vector3.new(4, 3, 8), CFrame = at(plot, 26, 1.5, 0),
@@ -643,6 +704,11 @@ local function makePlot(index: number)
 		local rare = hit:GetAttribute("Rare")
 		hit:Destroy()
 		if not st then return end
+		if rare then -- into the team's collection
+			st.data.rares[rare] = (st.data.rares[rare] or 0) + 1
+			st.dirty = true
+			refreshShelf(plot, st)
+		end
 		if rare == "Rainbow" then -- the whole server hears about a Rainbow
 			notify:FireAllClients(("%s stamped a RAINBOW part! +%s"):format(plot.team.name, money(value)))
 		elseif rare then
@@ -1100,7 +1166,7 @@ local function assignPlot(player: Player)
 	for _, plot in plots do
 		if not plot.owner then
 			plot.owner = player
-			plot.signLabel.Text = player.DisplayName .. "'s garage"
+			refreshSign(plot, states[player])
 			return plot
 		end
 	end
@@ -1145,8 +1211,9 @@ local function onPlayerAdded(player: Player)
 		notify:FireClient(player, "This server is full of teams. Try another server.")
 		return
 	end
+	refreshSign(st.plot, st)
 	if PHOTO_MODE then
-		st.plot.signLabel.Text = "Your garage"
+		st.data.rares = { Gold = 9, Rainbow = 2 } -- something in the collection case for its picture
 		-- a finished garage in the night look on a free plot next door, for its picture
 		for _, plot in plots do
 			if not plot.owner then
@@ -1218,7 +1285,8 @@ Players.PlayerRemoving:Connect(function(player)
 	save(player, true)
 	if st.plot then
 		st.plot.owner = nil
-		st.plot.signLabel.Text = "Free garage"
+		st.plot.owner = nil
+		refreshSign(st.plot, nil)
 		st.plot.pendingLabel.Text = "Collect $0"
 		st.plot.items:ClearAllChildren()
 		st.plot.drops:ClearAllChildren()
