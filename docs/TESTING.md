@@ -16,6 +16,14 @@ sound loads and that banking shows a +$ pop-up. It prints PASS or FAIL for each 
 errors the game logged, then removes the plugin. It never publishes anything. The latest place
 file is a CI artifact (`PitLaneTycoon-place`) on every run.
 
+Then the time trial: the track, the show car's Drive prompt and the Fastest laps board are
+there; Race seats the player in their own car, which their computer drives; holding the brake
+reverses it (the driving script and the car's motors work); the test then laps the car along
+the centre line at 50 studs/s and checks the server timed it (length / 50 to within 5%), paid
+for it and made it the best lap, that cutting across the infield voids the next lap, and that
+jumping out returns the player to their garage. On screen: the Race button becomes Leave car,
+and the lap panel and its clock show.
+
 It also checks that the onboarding funnel logs the join and the first purchase, and that the
 game logged no warnings of its own (a failing save or analytics call warns). Lock the screen
 and Studio draws its viewport 1 px tall: the server checks still hold, but the client layout
@@ -26,7 +34,12 @@ Studio runs on 24 Oct 2026: 19/19 checks passed and the game logged no errors.
 Saving across servers can't be played in Studio (an unpublished place has no DataStore), so the
 lock is tested on its own: `luau tests/SaveLock.spec.luau` (CI runs it) plays a server hop, a
 crashed server, a server that comes back after losing its lock, a late save after leaving, a
-failing store and a player who leaves while waiting.
+failing store and a player who leaves while waiting. `luau tests/Racing.spec.luau` checks that
+the track clears every garage and has no bend under 40 studs, that the car reaches top speed,
+brakes, reverses, slows on grass and steers the right way, and that lap timing is accurate
+(also with uneven samples), voids cut and teleported laps and does not count reversing over the
+line. Five deliberate bugs (no teleport check, laps counted backwards, no nearest-point search,
+steering reversed, a track through the garages) each failed it on 25 Oct 2026.
 
 ## By hand
 
@@ -47,7 +60,12 @@ Do this in Roblox Studio after a big change, and note anything that fails.
    the top bar, Shop button and shop window fit on screen and the Shop button is not in the
    bottom-left corner where the thumbstick goes.
 7. Open **Shop**. **Check:** it says the shop opens soon (no pass ids are set yet).
-8. **Saving** only works on a published place: File > Publish to Roblox, then Game Settings >
+8. Press **Race**. **Check:** you sit in your team's car on the grid behind the chequered line,
+   and a lap panel says "Out lap". Drive with WASD: the car accelerates, steers, slows on the
+   grass, and the clock starts at the line. Finish a lap on the road: a "Lap 0:.." message and a
+   +$ pop-up. Press Space: you are back at your garage. On a phone layout (step 6), drive with
+   the thumbstick.
+9. **Saving** only works on a published place: File > Publish to Roblox, then Game Settings >
    Security > Enable Studio Access to API Services. Play, earn some cash, stop, Play again.
    **Check:** your cash and machines come back.
 
