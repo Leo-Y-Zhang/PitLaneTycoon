@@ -187,9 +187,11 @@ local function photoShoot()
 			gui.Enabled = false
 		end
 	end
-	local sign = plot:FindFirstChild("Sign") -- the name board is a blank red block without its label
-	if sign and sign:IsA("BasePart") then
-		sign.LocalTransparencyModifier = 1
+	for _, model in workspace.Plots:GetChildren() do -- name boards are blank blocks without their labels
+		local sign = model:FindFirstChild("Sign")
+		if sign and sign:IsA("BasePart") then
+			sign.LocalTransparencyModifier = 1
+		end
 	end
 	local base = (plot:FindFirstChild("Base") :: BasePart).CFrame
 	local cam = workspace.CurrentCamera

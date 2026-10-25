@@ -282,18 +282,17 @@ function Scenery.siteProp(name: string, parent: Instance, cf: CFrame): Model
 	return m
 end
 
--- a stamping press over the conveyor: four posts, a crosshead in team colours, a hydraulic
--- cylinder and the die that comes down on each part. cf = the crosshead's centre. Returns the
+-- a stamping press over the conveyor: a C-frame (two posts behind the belt, open to the
+-- front, where players stand), a crosshead in team colours, a hydraulic cylinder and the die
+-- that comes down on each part. cf = the crosshead's centre. Returns the
 -- crosshead (named, the label's anchor) and the die (moved by the stamp).
 function Scenery.press(parent: Instance, cf: CFrame, name: string, colour: Color3): (Part, Part)
-	for _, x in { -1.0, 1.0 } do
-		for _, z in { -3.7, 3.7 } do
-			block(parent, cf * CFrame.new(x, -4.3, z), Vector3.new(0.45, 9.2, 0.45), CARBON, Enum.Material.Metal)
-		end
+	for _, x in { -0.8, 0.8 } do
+		block(parent, cf * CFrame.new(x, -4.3, 3.8), Vector3.new(0.4, 9.2, 0.6), STEEL, Enum.Material.Metal)
 	end
-	local head = block(parent, cf, Vector3.new(2.6, 1, 7.9), Color3.fromRGB(70, 74, 82), Enum.Material.Metal)
+	local head = block(parent, cf * CFrame.new(0, 0, 1.2), Vector3.new(2.6, 1, 5.6), Color3.fromRGB(70, 74, 82), Enum.Material.Metal)
 	head.Name = name
-	block(parent, cf * CFrame.new(0, 0.62, 0), Vector3.new(2.8, 0.25, 8.2), colour)
+	block(parent, cf * CFrame.new(0, 0.62, 1.2), Vector3.new(2.8, 0.25, 5.9), colour)
 	local cylinder = block(parent, cf * CFrame.new(0, -1.5, 0) * CFrame.Angles(0, 0, math.rad(90)), Vector3.new(2, 1.4, 1.4),
 		Color3.fromRGB(176, 182, 190), Enum.Material.Metal)
 	cylinder.Shape = Enum.PartType.Cylinder
