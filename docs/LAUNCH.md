@@ -112,6 +112,11 @@ before applying.
   seasons; a Legendary is announced to the whole server. A crate costs 5 minutes of income
   before crew boosts, so it never gets dearer as the crew improves. Three principals, the
   ceiling, make 2.8x income (`tests/Crew.spec.luau` keeps it under 3x).
+- **Scout's pick (25 Oct 2026),** the restocking shop of Grow a Garden for the crew: one
+  member on offer at a fixed price at the top of the crew panel, the same in every server and
+  new every 10 minutes, with a countdown. It costs 2, 5, 14 or 35 crates by rarity, fewer than
+  hunting that member with crates would take, and each team may hire it once per pick. A
+  Legendary is the pick about one time in twelve, which is worth a line in the description.
 - **A welcome card (25 Oct 2026):** a first visit opens with three lines on how the game works
   (the conveyor earns, bank on the blue pad and buy on the red, Race any time) until the player
   presses Let's go or buys their first machine. The guide line, the Next bar and the first goal

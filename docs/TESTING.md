@@ -24,7 +24,8 @@ part glows and is worth five times a normal one. The pit crew stays closed after
 the test opens it (`PLT_Crew`, which also pays for ten crates) and the player's side hires four:
 each crate costs the same however good the crew, a fifth crate straight after is refused, the
 best three stand by the car, income rises by exactly their boost, and the panel shows every
-member and the odds. (The speed readout check failed twice in four
+member and the odds. Scout's pick is on offer with its end time; the test makes it a Mechanic
+(`PLT_Pick`), the strip shows it with a countdown, it costs two crates and hires once. (The speed readout check failed twice in four
 runs on 25 Oct 2026 while the car demonstrably reversed in the others: the test's brake input
 is flaky, not the game.)
 
