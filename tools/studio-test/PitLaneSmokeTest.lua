@@ -301,6 +301,50 @@ local function photoShoot()
 			car:PivotTo(CFrame.lookAt(at, at - Vector3.new(tx, 0, tz)))
 		end
 	end
+	-- last, the Endurance circuit (the photo run opens every layout): a picture of the car on its
+	-- grid under the gantry, then a lap at 50 studs/s for the server half to time
+	driveRemote:FireServer(false)
+	waitFor(function()
+		return humanoid and humanoid.SeatPart == nil
+	end, 5)
+	task.wait(1)
+	driveRemote:FireServer(true, "long")
+	local longSeat = humanoid and waitFor(function()
+		return humanoid.SeatPart
+	end, 8)
+	if longSeat then
+		local shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+		local TrackShape = require(shared:WaitForChild("TrackShape")) :: any
+		local long = (require(shared:WaitForChild("Config")) :: any).LongTrack
+		local car = longSeat.Parent :: Model
+		local grid = car:GetPivot().Position
+		local a = TrackShape.nearest(long, grid.X, grid.Z)
+		if a > math.pi then
+			a -= 2 * math.pi -- just behind the line
+		end
+		local tx, tz = TrackShape.tangent(long, 0)
+		local ahead = Vector3.new(tx, 0, tz)
+		local hold = RunService.Heartbeat:Connect(function()
+			cam.CameraType = Enum.CameraType.Scriptable
+		end)
+		task.wait(1)
+		hideGuis()
+		cam.CFrame = CFrame.lookAt(grid - ahead * 30 + Vector3.new(tz, 0, -tx) * 18 + Vector3.new(0, 12, 0), grid + ahead * 14)
+		task.wait(1.5)
+		print(TAG, "SHOT endurance")
+		task.wait(1)
+		hold:Disconnect()
+		while a < 2 * math.pi + 0.3 do
+			local dt = RunService.Heartbeat:Wait()
+			local x1, z1 = TrackShape.point(long, a)
+			local x2, z2 = TrackShape.point(long, a + 0.001)
+			a += 50 * dt / (math.sqrt((x2 - x1) ^ 2 + (z2 - z1) ^ 2) / 0.001)
+			local x, z = TrackShape.point(long, a)
+			local dx, dz = TrackShape.tangent(long, a)
+			local at = Vector3.new(x, 1.1, z)
+			car:PivotTo(CFrame.lookAt(at, at + Vector3.new(dx, 0, dz)))
+		end
+	end
 	print(TAG, "PHOTOS-DONE")
 end
 
@@ -705,12 +749,20 @@ if SCENARIO == "photo" then
 			.. ("a Reverse GP lap is timed by the server (%s s, expected %.2f)"):format(tostring(lap), expect))
 		local apart = player and player:GetAttribute("BestLap") == 0
 		print(TAG, (apart and "PASS " or "FAIL ") .. "it does not count as a Grand Prix lap")
+		local longLap = player and waitFor(function()
+			return player:GetAttribute("BestLapLong") ~= 0 and player:GetAttribute("BestLapLong")
+		end, 120)
+		local longExpect = (require(shared:WaitForChild("TrackShape")) :: any).length(
+			(require(shared:WaitForChild("Config")) :: any).LongTrack) / 50
+		local longTimed = longLap and math.abs(longLap - longExpect) / longExpect < 0.05
+		print(TAG, (longTimed and "PASS " or "FAIL ")
+			.. ("an Endurance lap is timed by the server (%s s, expected %.2f)"):format(tostring(longLap), longExpect))
 		local ok = ratio > 0.85 and ratio < 1.15
 		print(TAG, (ok and "PASS " or "FAIL ") .. ("a full garage earns what the HUD says (%.2f of it)"):format(ratio))
 		print(TAG, ("PERF one full garage: server step %.1f ms (worst %.1f), physics %.0f fps, %d parts in the world, %d on the line"):format(
 			perf.step * 1000, perf.worst * 1000, perf.fps, perf.parts, perf.drops))
-		local passed = (ok and 1 or 0) + (timed and 1 or 0) + (apart and 1 or 0)
-		StudioTestService:EndTest({ passed = passed, total = 3, errors = errors, warnings = warnings })
+		local passed = (ok and 1 or 0) + (timed and 1 or 0) + (apart and 1 or 0) + (longTimed and 1 or 0)
+		StudioTestService:EndTest({ passed = passed, total = 4, errors = errors, warnings = warnings })
 	end)
 	return
 end
@@ -821,6 +873,8 @@ local function run()
 	check("a new player gets the welcome card", player:GetAttribute("Welcome") == true, player:GetAttribute("Welcome"))
 	check("the Reverse GP is locked in the first season", player:GetAttribute("ReverseUnlocked") == false,
 		player:GetAttribute("ReverseUnlocked"))
+	check("the Endurance circuit is locked until season 3", player:GetAttribute("LongUnlocked") == false,
+		player:GetAttribute("LongUnlocked"))
 	check("the first goal is to bank cash", player:GetAttribute("GoalText") == "Bank your first cash",
 		player:GetAttribute("GoalText"))
 	local giftIn = (player:GetAttribute("GiftAt") or 0) - workspace:GetServerTimeNow()
@@ -938,6 +992,10 @@ local function run()
 	-- the time trial: the client half takes the car, reverses, laps and jumps out
 	local track = workspace:FindFirstChild("Track")
 	check("a time-trial track rings the paddock", track and #track:GetChildren() > 300, track and #track:GetChildren())
+	local longTrack = workspace:FindFirstChild("LongTrack")
+	check("the Endurance circuit rings the Grand Prix track", longTrack and #longTrack:GetChildren() > 300,
+		longTrack and #longTrack:GetChildren())
+	check("the Endurance circuit has its own fastest-laps board", workspace:FindFirstChild("LapBoardLong"))
 	local showCar = plot.Items:FindFirstChild("ShowCar")
 	check("the show car offers a drive", showCar and showCar:FindFirstChildWhichIsA("ProximityPrompt", true))
 	check("a fastest-laps board stands at the spawn", workspace:FindFirstChild("LapBoard"))

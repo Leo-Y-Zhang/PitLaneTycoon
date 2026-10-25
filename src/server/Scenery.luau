@@ -461,11 +461,12 @@ function Scenery.car(parent: Instance, cf: CFrame, colour: Color3, season: numbe
 	return car
 end
 
--- the time-trial track: grass beyond the paddock, the road with white edge lines and red and
--- white kerbs on the bends, a chequered start line and a gantry over it
-function Scenery.track(shape: TrackShape.Shape)
+-- a time-trial circuit: the road with white edge lines and red and white kerbs on the bends,
+-- a chequered start line and a gantry over it titled `title`. Given `grassTo`, it also lays
+-- the ground: grass out past that radius, and the paddock's asphalt inside this circuit.
+function Scenery.track(shape: TrackShape.Shape, name: string, title: string, grassTo: number?)
 	local folder = Instance.new("Folder")
-	folder.Name = "Track"
+	folder.Name = name
 	folder.Parent = workspace
 	local n = 200
 	local points = TrackShape.samples(shape, n)
@@ -476,15 +477,18 @@ function Scenery.track(shape: TrackShape.Shape)
 	end
 	inner -= shape.halfWidth
 	outer += shape.halfWidth
-	local grass = block(folder, CFrame.new(0, -0.7, 0), Vector3.new(2 * outer + 80, 1, 2 * outer + 80),
-		Color3.fromRGB(78, 128, 64), Enum.Material.Grass)
-	grass.CanCollide = true
-	-- the paddock's asphalt stops just inside the track, so the infield between is grass
-	local floor = block(folder, CFrame.new(0, -0.6, 0) * CFrame.Angles(0, 0, math.rad(90)),
-		Vector3.new(1, 2 * (inner - 3), 2 * (inner - 3)), Color3.fromRGB(84, 92, 98), Enum.Material.Asphalt)
-	floor.Name = "PaddockFloor"
-	floor.Shape = Enum.PartType.Cylinder
-	floor.CanCollide = true
+	if grassTo then
+		local size = 2 * math.max(outer, grassTo) + 80
+		local grass = block(folder, CFrame.new(0, -0.7, 0), Vector3.new(size, 1, size), Color3.fromRGB(78, 128, 64),
+			Enum.Material.Grass)
+		grass.CanCollide = true
+		-- the paddock's asphalt stops just inside the track, so the infield between is grass
+		local floor = block(folder, CFrame.new(0, -0.6, 0) * CFrame.Angles(0, 0, math.rad(90)),
+			Vector3.new(1, 2 * (inner - 3), 2 * (inner - 3)), Color3.fromRGB(84, 92, 98), Enum.Material.Asphalt)
+		floor.Name = "PaddockFloor"
+		floor.Shape = Enum.PartType.Cylinder
+		floor.CanCollide = true
+	end
 	for i, p in points do
 		local q = points[i % n + 1]
 		local prev = points[(i - 2) % n + 1]
@@ -523,8 +527,8 @@ function Scenery.track(shape: TrackShape.Shape)
 	end
 	local beam = block(folder, start * CFrame.new(0, 15, 0), Vector3.new(2 * shape.halfWidth + 6.4, 3, 1.4), CARBON,
 		Enum.Material.Metal)
-	sign(beam, Enum.NormalId.Front, "TIME TRIAL", Color3.fromRGB(255, 205, 60))
-	sign(beam, Enum.NormalId.Back, "TIME TRIAL", Color3.fromRGB(255, 205, 60))
+	sign(beam, Enum.NormalId.Front, title, Color3.fromRGB(255, 205, 60))
+	sign(beam, Enum.NormalId.Back, title, Color3.fromRGB(255, 205, 60))
 	for k = -2, 2 do -- the start lights (Drive.client.luau runs each driver's start on them)
 		local light = block(folder, start * CFrame.new(k * 2.2, 13, -0.4), Vector3.new(1, 1, 0.6), Color3.fromRGB(255, 40, 40),
 			Enum.Material.Neon)

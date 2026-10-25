@@ -47,6 +47,7 @@ end
 local board = ordered(Config.LeaderboardName) -- the earnings leaderboard
 local lapBoard = ordered(Config.LapBoardName) -- best laps, in milliseconds
 local lapBoardReverse = ordered(Config.LapBoardReverseName) -- best Reverse GP laps
+local lapBoardLong = ordered(Config.LapBoardLongName) -- best Endurance laps
 
 -- remotes ---------------------------------------------------------------------------
 local remotes = Instance.new("Folder")
@@ -150,6 +151,7 @@ type Data = {
 	funnel: number, -- the furthest onboarding-funnel step logged (Analytics)
 	bestLap: number, laps: number, -- time trial: best lap in seconds (0 = none yet), clean laps
 	bestLapReverse: number, -- the Reverse GP's best lap
+	bestLapLong: number, -- the Endurance circuit's best lap
 	goal: number, banks: number, codes: { [string]: boolean }, -- the next goal (Config.Goals), times banked, codes used
 	settings: { music: boolean, sfx: boolean },
 	welcomed: boolean, -- has seen the first-visit card
@@ -170,7 +172,7 @@ local states: { [Player]: State } = {}
 local function freshData(): Data
 	return {
 		cash = 0, bought = {}, season = 0, lastDaily = 0, streak = 0, receipts = {},
-		earned = 0, lastSeen = 0, offlineRate = 0, funnel = 0, bestLap = 0, laps = 0, bestLapReverse = 0,
+		earned = 0, lastSeen = 0, offlineRate = 0, funnel = 0, bestLap = 0, laps = 0, bestLapReverse = 0, bestLapLong = 0,
 		goal = 1, banks = 0, codes = {}, settings = { music = true, sfx = true }, welcomed = false,
 		rares = {}, likes = 0, likedOn = {}, crew = {}, pickWindow = 0,
 	}
@@ -359,6 +361,8 @@ local function publish(player: Player)
 	player:SetAttribute("BestLap", st.data.bestLap)
 	player:SetAttribute("BestLapReverse", st.data.bestLapReverse)
 	player:SetAttribute("ReverseUnlocked", st.data.season >= Config.Track.reverseFromSeason)
+	player:SetAttribute("BestLapLong", st.data.bestLapLong)
+	player:SetAttribute("LongUnlocked", st.data.season >= Config.LongTrack.fromSeason)
 	local goal = Config.Goals[st.data.goal]
 	player:SetAttribute("GoalText", goal and goal.text or "")
 	if goal then
@@ -1146,6 +1150,10 @@ local lapRows = makeBoard("LapBoard", CFrame.new(0, 6.5, 14), Enum.NormalId.Fron
 local reverseAt = Vector3.new(math.cos(math.rad(150)), 0, math.sin(math.rad(150))) * 15 + Vector3.new(0, 6.5, 0)
 local lapRowsReverse = makeBoard("LapBoardReverse", CFrame.lookAt(reverseAt, Vector3.new(0, 6.5, 0)), Enum.NormalId.Front,
 	"Fastest laps: Reverse GP", Color3.fromRGB(120, 60, 200))
+-- and the Endurance board in the same spot on the other side
+local longAt = Vector3.new(math.cos(math.rad(210)), 0, math.sin(math.rad(210))) * 15 + Vector3.new(0, 6.5, 0)
+local lapRowsLong = makeBoard("LapBoardLong", CFrame.lookAt(longAt, Vector3.new(0, 6.5, 0)), Enum.NormalId.Front,
+	"Fastest laps: Endurance", Color3.fromRGB(214, 110, 20))
 
 local function lapTime(seconds: number): string
 	return ("%d:%05.2f"):format(seconds // 60, seconds % 60)
@@ -1186,24 +1194,27 @@ local function refreshBoard()
 	end
 	fillBoard(lapRows, lapBoard, true, show)
 	fillBoard(lapRowsReverse, lapBoardReverse, true, show)
+	fillBoard(lapRowsLong, lapBoardLong, true, show)
 end
 
 -- the time trial ----------------------------------------------------------------------
 -- a clean lap pays a little; a new best lap pays more and goes on the board
-local function lapDone(player: Player, seconds: number, reverse: boolean)
+local LAP_FIELD = { gp = "bestLap", reverse = "bestLapReverse", long = "bestLapLong" }
+local LAP_NAME = { gp = "lap", reverse = "Reverse GP lap", long = "Endurance lap" }
+local function lapDone(player: Player, seconds: number, layout: string)
 	local st = states[player]
 	if not st then return end
 	st.data.laps += 1
 	local perMin = incomePerMinute(st)
 	local reward = math.max(Config.Drive.lapRewardFloor * multiplier(st), perMin * Config.Drive.lapRewardMinutes)
-	local field = reverse and "bestLapReverse" or "bestLap"
+	local field = LAP_FIELD[layout] or "bestLap"
 	local previous = (st.data :: any)[field]
 	local best = previous == 0 or seconds < previous
 	if best then
 		(st.data :: any)[field] = seconds
 		reward += perMin * Config.Drive.bestLapMinutes
 		local isOwner = game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
-		local board = reverse and lapBoardReverse or lapBoard
+		local board = if layout == "reverse" then lapBoardReverse elseif layout == "long" then lapBoardLong else lapBoard
 		if board and not isOwner then
 			task.spawn(pcall, function()
 				board:SetAsync("u_" .. player.UserId, math.floor(seconds * 1000))
@@ -1212,7 +1223,7 @@ local function lapDone(player: Player, seconds: number, reverse: boolean)
 	end
 	addCash(player, reward)
 	effect:FireClient(player, "banked", reward)
-	local what = reverse and "Reverse GP lap" or "lap"
+	local what = LAP_NAME[layout] or "lap"
 	notify:FireClient(player, (best and "New best %s %s! +%s" or "%s %s  +%s"):format(what, lapTime(seconds), money(reward)))
 	Analytics.earned(player, reward, st.data.cash, Enum.AnalyticsEconomyTransactionType.Gameplay, "Lap")
 	checkGoals(player)
@@ -1472,6 +1483,7 @@ Racing.start({
 	tell = function(player: Player, text: string)
 		notify:FireClient(player, text)
 	end,
+	photo = PHOTO_MODE,
 }, remotes)
 
 Players.PlayerAdded:Connect(onPlayerAdded)

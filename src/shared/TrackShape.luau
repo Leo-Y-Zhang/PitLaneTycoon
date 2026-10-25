@@ -80,6 +80,16 @@ function TrackShape.samples(shape: Shape, n: number): { { x: number, z: number, 
 	return out
 end
 
+-- how near to and how far from the spawn the road's edges come
+function TrackShape.extent(shape: Shape): (number, number)
+	local inner, outer = math.huge, 0
+	for _, p in TrackShape.samples(shape, 2000) do
+		local r = math.sqrt(p.x * p.x + p.z * p.z)
+		inner, outer = math.min(inner, r), math.max(outer, r)
+	end
+	return inner - shape.halfWidth, outer + shape.halfWidth
+end
+
 function TrackShape.length(shape: Shape): number
 	local points = TrackShape.samples(shape, 2000)
 	local total = 0

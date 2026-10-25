@@ -21,11 +21,12 @@ export type Host = {
 	colour: (Player) -> Color3,
 	slot: (Player) -> number, -- the player's garage number, for a place on the grid
 	garage: (Player) -> CFrame?, -- where a player goes back to after driving
-	lap: (Player, number, boolean) -> (), -- a clean lap of this many seconds (true = Reverse GP)
+	lap: (Player, number, string) -> (), -- a clean lap of this many seconds on a layout ("gp", "reverse", "long")
 	tell: (Player, string) -> (), -- a message on the player's screen
+	photo: boolean?, -- Studio's photo run, which drives every layout
 }
 
-type Car = { model: Model, chassis: BasePart, seat: VehicleSeat, timer: LapTimer.Timer, reverse: boolean }
+type Car = { model: Model, chassis: BasePart, seat: VehicleSeat, timer: LapTimer.Timer, layout: string }
 local cars: { [Player]: Car } = {}
 local host: Host
 local folder: Folder
@@ -40,13 +41,19 @@ function Racing.topSpeed(season: number): number
 	return math.min(Config.Drive.maxTopSpeed, Config.Drive.topSpeed + Config.Drive.perSeason * season)
 end
 
+-- the circuit a layout runs on: the Grand Prix track (either way round) or the Endurance circuit
+local function shapeOf(layout: string): any
+	return if layout == "long" then Config.LongTrack else Config.Track
+end
+
 -- a place on the grid just behind the start line, nose along the track (the other side of
--- the line and the other way round for the Reverse GP)
-local function gridSpot(slot: number, reverse: boolean): CFrame
-	local way = reverse and -1 or 1
-	local a = way * (-0.035 - 0.014 * ((slot - 1) // 2))
-	local x, z = TrackShape.point(Config.Track, a)
-	local dx, dz = TrackShape.tangent(Config.Track, a)
+-- the line and the other way round for the Reverse GP); rows are as far apart on every circuit
+local function gridSpot(slot: number, layout: string): CFrame
+	local shape = shapeOf(layout)
+	local way = layout == "reverse" and -1 or 1
+	local a = way * (-0.035 - 0.014 * ((slot - 1) // 2)) * Config.Track.radius / shape.radius
+	local x, z = TrackShape.point(shape, a)
+	local dx, dz = TrackShape.tangent(shape, a)
 	local side = (slot % 2 == 0 and 1 or -1) * 3.5
 	local at = Vector3.new(x - dz * side, 0.2, z + dx * side)
 	return CFrame.lookAt(at, at + Vector3.new(dx, 0, dz) * way)
@@ -61,7 +68,7 @@ end
 -- the show car's body on an invisible chassis that glides on four ball skids (they slide
 -- over the joins between road pieces); a LinearVelocity and an AngularVelocity, set by the
 -- driver's computer, do the driving and keep the car level
-local function buildCar(player: Player, pose: CFrame, season: number, reverse: boolean): Car
+local function buildCar(player: Player, pose: CFrame, season: number, layout: string): Car
 	local model = Scenery.car(folder, pose, host.colour(player), season)
 	model.Name = "Car_" .. player.UserId
 	local chassis = Instance.new("Part")
@@ -132,15 +139,16 @@ local function buildCar(player: Player, pose: CFrame, season: number, reverse: b
 	model.PrimaryPart = chassis
 	local top = Racing.topSpeed(season)
 	model:SetAttribute("TopSpeed", top)
+	local shape = shapeOf(layout)
 	local timer = LapTimer.new({
 		nearest = function(x: number, z: number)
-			return TrackShape.nearest(Config.Track, x, z)
+			return TrackShape.nearest(shape, x, z)
 		end,
-		limit = Config.Track.limit,
+		limit = shape.limit,
 		maxSpeed = top,
-		reverse = reverse,
+		reverse = layout == "reverse",
 	})
-	return { model = model, chassis = chassis, seat = seat, timer = timer, reverse = reverse }
+	return { model = model, chassis = chassis, seat = seat, timer = timer, layout = layout }
 end
 
 local function setLap(player: Player, start: number, valid: boolean)
@@ -166,23 +174,28 @@ function Racing.leave(player: Player)
 	end
 end
 
--- layout: "gp" (the default) or "reverse", which opens in Config.Track.reverseFromSeason
+-- layout: "gp" (the default), "reverse" (opens in Config.Track.reverseFromSeason) or "long",
+-- the Endurance circuit (opens in Config.LongTrack.fromSeason)
 function Racing.drive(player: Player, layout: string?)
 	if cars[player] then return end
 	local season = host.season(player)
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if season == nil or not humanoid or humanoid.Health <= 0 or humanoid.SeatPart then return end
-	local reverse = layout == "reverse"
-	if reverse and season < Config.Track.reverseFromSeason then
+	local chosen = if layout == "reverse" or layout == "long" then layout else "gp"
+	if chosen == "reverse" and season < Config.Track.reverseFromSeason then
 		host.tell(player, ("The Reverse GP opens in season %d"):format(Config.Track.reverseFromSeason + 1))
 		return
 	end
-	local pose = gridSpot(host.slot(player), reverse)
-	local car = buildCar(player, pose, season, reverse)
+	if chosen == "long" and season < Config.LongTrack.fromSeason and not host.photo then
+		host.tell(player, ("The Endurance circuit opens in season %d"):format(Config.LongTrack.fromSeason + 1))
+		return
+	end
+	local pose = gridSpot(host.slot(player), chosen)
+	local car = buildCar(player, pose, season, chosen)
 	cars[player] = car
 	player:SetAttribute("Driving", true)
-	player:SetAttribute("Layout", reverse and "reverse" or "gp")
+	player:SetAttribute("Layout", chosen)
 	setLap(player, 0, true)
 	character:PivotTo(pose * CFrame.new(0, 4, 0))
 	car.seat:Sit(humanoid)
@@ -230,7 +243,7 @@ local function tick()
 		if event and event.kind == "lap" then
 			player:SetAttribute("LastLap", event.time)
 			if event.valid then
-				host.lap(player, event.time :: number, car.reverse)
+				host.lap(player, event.time :: number, car.layout)
 			end
 		end
 		if event then
@@ -257,7 +270,9 @@ end
 
 function Racing.start(h: Host, remotes: Folder)
 	host = h
-	Scenery.track(Config.Track)
+	local _, outer = TrackShape.extent(Config.LongTrack)
+	Scenery.track(Config.Track, "Track", "TIME TRIAL", outer) -- the grass reaches past both circuits
+	Scenery.track(Config.LongTrack, "LongTrack", "ENDURANCE")
 	folder = Instance.new("Folder")
 	folder.Name = "RaceCars"
 	folder.Parent = workspace
@@ -266,7 +281,7 @@ function Racing.start(h: Host, remotes: Folder)
 	drive.Parent = remotes
 	drive.OnServerEvent:Connect(function(player, want, layout)
 		if want == true then
-			Racing.drive(player, if layout == "reverse" then "reverse" else "gp")
+			Racing.drive(player, if type(layout) == "string" then layout else nil)
 		elseif want == false then
 			Racing.leave(player)
 		end
