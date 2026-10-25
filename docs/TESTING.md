@@ -53,7 +53,8 @@ Studio runs on 24 Oct 2026: 19/19 checks passed and the game logged no errors.
 `run.py PLACE --photos --shots DIR` builds every machine and garage piece, checks a full garage
 earns what the HUD says, takes six pictures (four of the garage, the race car at the start
 gantry, the track) and prints a PERF line: the server's step time, physics rate and part counts.
-On 25 Oct 2026 with one full garage: 60 physics steps a second (worst step 20 ms), 1,492 parts.
+It ends with a Reverse GP lap (the photo garage is in season 2) and checks the server timed it
+and kept it apart from the Grand Prix best. On 25 Oct 2026 with one full garage: 60 physics steps a second (worst step 20 ms), 1,492 parts.
 
 Saving across servers can't be played in Studio (an unpublished place has no DataStore), so the
 lock is tested on its own: `luau tests/SaveLock.spec.luau` (CI runs it) plays a server hop, a

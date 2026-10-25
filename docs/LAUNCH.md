@@ -123,7 +123,8 @@ before applying.
   season (65 up to 95), so every season's car has a lap record to beat. Every drive opens with
   an F1 start: five red lights on the gantry, a beep each, then lights out and GO. The engine
   (a licensed race-car recording, pitched by speed) and squealing tyres are heard, and the lap
-  panel shows km/h. Put "drive your own F1
+  panel shows km/h. From season 2 the **Reverse GP** opens: the same circuit the other way
+  round (Race asks which), with its own best laps and its own board at the spawn. Put "drive your own F1
   car" in the description and a car on the track in a thumbnail.
 
 ## Saving across servers
