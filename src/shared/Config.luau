@@ -227,6 +227,14 @@ Config.Track = {
 	limit = 13,
 	reverseFromSeason = 1, -- the Reverse GP (the same circuit the other way) opens in season 2
 }
+-- MUTANT (dropped before merge): overlaps the Grand Prix track, too short, opens with the Reverse GP
+Config.LongTrack = {
+	radius = 200,
+	waves = { { 40, 3, 2.0 }, { 14, 6, 1.5 }, { 6, 11, 0.7 } },
+	halfWidth = 8,
+	limit = 13,
+	fromSeason = 1,
+}
 -- The race car (src/shared/DriveModel.luau). Speeds in studs per second; it gets faster
 -- every season. A clean lap pays lapRewardMinutes of income, a new best lap bestLapMinutes
 -- more, so driving pays a little while the factory keeps earning.
