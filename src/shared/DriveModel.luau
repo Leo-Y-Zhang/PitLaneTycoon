@@ -42,7 +42,7 @@ function DriveModel.step(speed: number, throttle: number, steer: number, dt: num
 	end
 	-- no turning on the spot, and reversing steers the other way round
 	local grip = math.min(1, math.abs(speed) / 12)
-	local turn = -steer * h.turnRate * grip * (if speed < 0 then -1 else 1)
+	local turn = steer * h.turnRate * grip * (if speed < 0 then -1 else 1)
 	return speed, turn
 end
 

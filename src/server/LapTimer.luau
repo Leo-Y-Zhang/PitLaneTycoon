@@ -64,12 +64,12 @@ function LapTimer.sample(timer: Timer, t: number, x: number, z: number): Event?
 	end
 	local moved = math.sqrt((x - timer.x) ^ 2 + (z - timer.z) ^ 2)
 	if moved > timer.opts.maxSpeed * 1.5 * (t - timer.t) + 12 then
-		spoil(timer, "teleport")
+		-- mutant: no teleport check
 	end
 
 	local event: Event? = nil
 	local line = math.floor(u / TAU)
-	if line > timer.line then
+	if line ~= timer.line then
 		local f = (line * TAU - prev) / (u - prev)
 		local crossed = timer.t + f * (t - timer.t)
 		if timer.lapStart then

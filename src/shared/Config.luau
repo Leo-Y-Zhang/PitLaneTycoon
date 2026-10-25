@@ -100,7 +100,7 @@ Config.HappyHour = { days = { 7, 1 }, startHourUtc = 18, hours = 1, mult = 2 }
 -- each wave; it must clear the garages (tests/Racing.spec.luau checks it). limit = how far
 -- from the centre line a car may stray before the lap stops counting.
 Config.Track = {
-	radius = 175,
+	radius = 140,
 	waves = { { 22, 3, 0.3 }, { 10, 5, 1.0 }, { 4, 8, 0.2 } },
 	halfWidth = 8,
 	limit = 13,

@@ -61,7 +61,7 @@ function TrackShape.nearest(shape: Shape, x: number, z: number): (number, number
 			lo = m1
 		end
 	end
-	local a = (lo + hi) / 2
+	local a = TrackShape.angleOf(x, z) -- mutant: no refinement
 	local d = math.sqrt(dist2(a))
 	if math.sqrt(x * x + z * z) < TrackShape.radiusAt(shape, a) then
 		d = -d
