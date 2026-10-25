@@ -477,11 +477,13 @@ function Scenery.car(parent: Instance, cf: CFrame, colour: Color3, season: numbe
 		for _, x in { -1.95, 1.95 } do
 			local wheel = p(x, w[2] / 2, w[1], w[3], w[2], w[2], CARBON)
 			wheel.Shape = Enum.PartType.Cylinder
-			-- the compound's band round the sidewall, between the tyre's edge and the rim
-			local band = p(x, w[2] / 2, w[1], w[3] + 0.01, w[2] * 0.8, w[2] * 0.8, Color3.fromRGB(255, 205, 60))
-			band.Shape = Enum.PartType.Cylinder
-			local rim = p(x + (x > 0 and 0.04 or -0.04), w[2] / 2, w[1], w[3] - 0.05, w[2] * 0.55, w[2] * 0.55, trim, Enum.Material.Metal)
-			rim.Shape = Enum.PartType.Cylinder
+			-- a thin white band round each sidewall: discs stacked a hair proud of each other,
+			-- band, then black sidewall inside it, then the rim on top
+			for _, disc in { { 0.02, 0.86, WHITE }, { 0.04, 0.76, CARBON }, { 0.06, 0.55, trim } } do
+				local d = p(x, w[2] / 2, w[1], w[3] + disc[1], w[2] * disc[2], w[2] * disc[2], disc[3],
+					disc[3] == trim and Enum.Material.Metal or nil)
+				d.Shape = Enum.PartType.Cylinder
+			end
 		end
 	end
 	car.Parent = parent
