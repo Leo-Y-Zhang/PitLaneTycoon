@@ -421,7 +421,12 @@ local function spawnPress(player: Player, item)
 			drop.Material = look[3]
 			drop.CFrame = at(plot, item.x, 4.6, 0)
 			-- now and then a rare one (Studio tests can ask for one with PLT_ForceRare)
+			-- (none in the photo garage: the photo run checks income against the HUD, and one Rainbow
+			-- on the top press adds 40% to its 20-second sample)
 			local _, crewRare = crewBoost(st)
+			if PHOTO_MODE then
+				crewRare = 0
+			end
 			local rare, rareMult = Rarity.roll(rng:NextNumber(), (liveEvent and liveEvent.rareMult or 1) * crewRare, Config.RareParts)
 			local forced = RunService:IsStudio() and workspace:GetAttribute("PLT_ForceRare")
 			if forced then
