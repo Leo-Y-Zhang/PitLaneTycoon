@@ -58,7 +58,7 @@ Everything else is built and tested; these need your account, your ears or other
    are six garages, and a seventh player would have none.
 3. **Icon and thumbnails** matter more than anything else for clicks: a bright car on a
    conveyor, big readable title, no small text. Ready-made ones are in `marketing/`
-   (`icon.png` 512x512, `thumbnail-1..3.png` 1280x720); upload all three thumbnails so Roblox
+   (`icon.png` 512x512, `thumbnail-1..4.png` 1280x720); upload all four thumbnails so Roblox
    rotates them. They contain no avatar or username. To remake them after a visual change:
    `python tools/studio-test/run.py PitLaneTycoon.rbxlx --photos --shots shots` then
    `python tools/studio-test/thumbnails.py shots marketing`.
