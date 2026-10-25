@@ -15,6 +15,8 @@ local Scenery = require(script.Parent:WaitForChild("Scenery"))
 local SaveLock = require(script.Parent:WaitForChild("SaveLock"))
 local Racing = require(script.Parent:WaitForChild("Racing"))
 local GaragePlan = require(script.Parent:WaitForChild("GaragePlan"))
+local Goals = require(script.Parent:WaitForChild("Goals"))
+local Codes = require(script.Parent:WaitForChild("Codes"))
 local Analytics = require(script.Parent:WaitForChild("Analytics"))
 -- this server's name on a save lock (Studio has no JobId)
 local JOB = game.JobId ~= "" and game.JobId or ("studio-" .. HttpService:GenerateGUID(false))
@@ -54,6 +56,10 @@ local function remote(name: string): RemoteEvent
 end
 local notify = remote("Notify")
 local newSeason = remote("NewSeason")
+local claimGift = remote("ClaimGift")
+local redeem = Instance.new("RemoteFunction") -- a code in, a message back
+redeem.Name = "Redeem"
+redeem.Parent = remotes
 local effect = remote("Effect") -- purchase sparks and "+$" pop-ups, drawn by the owner's HUD
 
 local ITEM_BY_KEY = {}
@@ -131,11 +137,13 @@ type Data = {
 	receipts: { [string]: boolean }, earned: number, lastSeen: number, offlineRate: number,
 	funnel: number, -- the furthest onboarding-funnel step logged (Analytics)
 	bestLap: number, laps: number, -- time trial: best lap in seconds (0 = none yet), clean laps
+	goal: number, banks: number, codes: { [string]: boolean }, -- the next goal (Config.Goals), times banked, codes used
 }
 type State = {
 	data: Data, plot: any?, pending: number, canSave: boolean, passes: { [string]: boolean }, dirty: boolean, friends: number,
 	leaving: boolean, released: boolean, -- the leaving save is under way / has let go of the lock
 	unlogged: number, -- factory income not yet sent to analytics (sent once a minute)
+	giftAt: number, lastRedeem: number, -- server time the next gift is ready; last code tried (os.clock)
 }
 local states: { [Player]: State } = {}
 
@@ -143,6 +151,7 @@ local function freshData(): Data
 	return {
 		cash = 0, bought = {}, season = 0, lastDaily = 0, streak = 0, receipts = {},
 		earned = 0, lastSeen = 0, offlineRate = 0, funnel = 0, bestLap = 0, laps = 0,
+		goal = 1, banks = 0, codes = {},
 	}
 end
 
@@ -226,6 +235,27 @@ local function nextItemIndex(st: State): number?
 	return nil
 end
 
+-- machines bought this season (the free first press does not count)
+local function purchasesOf(st: State): number
+	local n = -1
+	for _ in st.data.bought do
+		n += 1
+	end
+	return math.max(0, n)
+end
+
+local function goalStats(st: State): Goals.Stats
+	return {
+		banks = st.data.banks, purchases = purchasesOf(st), laps = st.data.laps, earned = st.data.earned,
+		bestLap = st.data.bestLap, season = st.data.season, trophy = st.data.bought.trophy == true,
+	}
+end
+
+-- a reward worth `minutes` of the player's income, at least `floor` times their multiplier
+local function rewardOf(st: State, minutes: number, floor: number): number
+	return math.max(floor * multiplier(st), incomePerMinute(st) * minutes)
+end
+
 local function publish(player: Player)
 	local st = states[player]
 	if not st then return end
@@ -247,6 +277,16 @@ local function publish(player: Player)
 	player:SetAttribute("NextCost", nextItem and nextItem.cost or 0)
 	player:SetAttribute("Plot", st.plot and st.plot.index or 0)
 	player:SetAttribute("BestLap", st.data.bestLap)
+	local goal = Config.Goals[st.data.goal]
+	player:SetAttribute("GoalText", goal and goal.text or "")
+	if goal then
+		local have, need = Goals.progress(goal, goalStats(st))
+		player:SetAttribute("GoalKind", goal.kind)
+		player:SetAttribute("GoalHave", have)
+		player:SetAttribute("GoalNeed", need)
+		player:SetAttribute("GoalReward", math.floor(rewardOf(st, goal.minutes, goal.floor)))
+	end
+	player:SetAttribute("GiftAt", st.giftAt)
 	for name in Config.Passes do
 		player:SetAttribute("Owns" .. name, st.passes[name] == true)
 	end
@@ -384,15 +424,6 @@ local function build(player: Player, item)
 	end
 end
 
--- machines bought this season (the free first press does not count)
-local function purchasesOf(st: State): number
-	local n = -1
-	for _ in st.data.bought do
-		n += 1
-	end
-	return math.max(0, n)
-end
-
 -- a new piece rises out of the floor
 local function rise(model: Model)
 	for _, p in model:GetDescendants() do
@@ -447,6 +478,24 @@ local function rebuildPlot(player: Player)
 	refreshPads(player)
 end
 
+-- pay for every goal now met, in order, and show the next one
+local function checkGoals(player: Player)
+	local st = states[player]
+	if not st then return end
+	local goal = Config.Goals[st.data.goal]
+	while goal and Goals.done(goal, goalStats(st)) do
+		local reward = rewardOf(st, goal.minutes, goal.floor)
+		st.data.goal += 1
+		st.data.cash += reward
+		st.dirty = true
+		notify:FireClient(player, "Goal done: " .. goal.text .. "  +" .. money(reward))
+		effect:FireClient(player, "banked", reward)
+		Analytics.earned(player, reward, st.data.cash, Enum.AnalyticsEconomyTransactionType.Gameplay, "Goal")
+		goal = Config.Goals[st.data.goal]
+	end
+	publish(player)
+end
+
 local function tryBuy(player: Player, index: number)
 	local st = states[player]
 	if not st or nextItemIndex(st) ~= index then return end
@@ -470,6 +519,7 @@ local function tryBuy(player: Player, index: number)
 			notify:FireClient(player, "Your garage grows: " .. piece.label)
 		end)
 	end
+	checkGoals(player)
 	Analytics.spent(player, item.cost, st.data.cash, Enum.AnalyticsEconomyTransactionType.Shop, item.key)
 	local purchases = -1 -- the first press is free
 	for _ in st.data.bought do
@@ -484,8 +534,10 @@ local function bankPending(player: Player)
 	if st and st.pending > 0 then
 		local amount = st.pending
 		st.pending = 0
+		st.data.banks += 1
 		addCash(player, amount, true)
 		effect:FireClient(player, "banked", amount)
+		checkGoals(player)
 	end
 end
 
@@ -740,6 +792,7 @@ newSeason.OnServerEvent:Connect(function(player)
 	save(player)
 	notify:FireClient(player, ("Season %d! Earnings now x%.1f"):format(st.data.season + 1, multiplier(st)))
 	st.data.funnel = Analytics.funnel(player, st.data.funnel, Analytics.Step.newSeason)
+	checkGoals(player)
 end)
 
 local function dailyReward(player: Player, st: State)
@@ -901,6 +954,49 @@ local function lapDone(player: Player, seconds: number)
 	effect:FireClient(player, "banked", reward)
 	notify:FireClient(player, (best and "New best lap %s! +%s" or "Lap %s  +%s"):format(lapTime(seconds), money(reward)))
 	Analytics.earned(player, reward, st.data.cash, Enum.AnalyticsEconomyTransactionType.Gameplay, "Lap")
+	checkGoals(player)
+end
+
+-- the gift for staying, and redeem codes ---------------------------------------------
+claimGift.OnServerEvent:Connect(function(player)
+	local st = states[player]
+	if not st then return end
+	local now = workspace:GetServerTimeNow()
+	if now < st.giftAt then
+		local left = math.ceil(st.giftAt - now)
+		notify:FireClient(player, ("Your gift is ready in %d:%02d"):format(left // 60, left % 60))
+		return
+	end
+	local reward = rewardOf(st, Config.Gift.minutes, Config.Gift.floor)
+	st.giftAt = now + Config.Gift.everyMinutes * 60
+	addCash(player, reward)
+	effect:FireClient(player, "banked", reward)
+	notify:FireClient(player, "Gift: +" .. money(reward))
+	Analytics.earned(player, reward, st.data.cash, Enum.AnalyticsEconomyTransactionType.TimedReward, "Gift")
+end)
+
+redeem.OnServerInvoke = function(player, text)
+	local st = states[player]
+	if not st or type(text) ~= "string" or #text > 40 then
+		return "That code doesn't work"
+	end
+	if os.clock() - st.lastRedeem < 1.5 then -- no guessing codes at speed
+		return "One code at a time"
+	end
+	st.lastRedeem = os.clock()
+	local code = string.upper((string.gsub(text, "%s", "")))
+	local prize = Codes[code]
+	if not prize then
+		return "That code doesn't work"
+	elseif st.data.codes[code] then
+		return "You've already used " .. code
+	end
+	st.data.codes[code] = true
+	local reward = rewardOf(st, prize.minutes, prize.floor)
+	addCash(player, reward)
+	effect:FireClient(player, "banked", reward)
+	Analytics.earned(player, reward, st.data.cash, Enum.AnalyticsEconomyTransactionType.Gameplay, "Code")
+	return "Code " .. code .. ": +" .. money(reward)
 end
 
 -- joining and leaving ---------------------------------------------------------------
@@ -937,6 +1033,7 @@ local function onPlayerAdded(player: Player)
 	local st: State = {
 		data = data, plot = nil, pending = 0, canSave = canSave, passes = {}, dirty = false, friends = 0,
 		leaving = false, released = false, unlogged = 0,
+		giftAt = workspace:GetServerTimeNow() + Config.Gift.everyMinutes * 60, lastRedeem = 0,
 	}
 	states[player] = st
 	checkPasses(player, st)
@@ -1060,6 +1157,15 @@ task.spawn(function()
 					notify:FireClient(player, "Happy hour! Everything earns 2x for the next hour")
 				end
 			end
+		end
+	end
+end)
+
+task.spawn(function()
+	while true do -- goals that money alone can meet (auto-collect pays without a bank)
+		task.wait(2)
+		for player in states do
+			checkGoals(player)
 		end
 	end
 end)

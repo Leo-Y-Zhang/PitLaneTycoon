@@ -98,6 +98,33 @@ Config.DailyRewards = {
 	cash = { 100, 250, 500, 1000, 2000, 4000, 8000 },
 	minutes = { 1, 2, 3, 5, 8, 12, 20 },
 }
+-- Goals, one at a time in this order (src/server/Goals.luau); each pays `minutes` of income
+-- (at least `floor` times the season multiplier) when met. Kinds: banks, purchases (this
+-- season), laps (clean), earned (factory, all seasons), lapUnder (n = seconds), trophy,
+-- season (n = new seasons started). tests/Goals.spec.luau checks they can all be met.
+Config.Goals = {
+	{ kind = "banks", n = 1, text = "Bank your first cash", minutes = 1, floor = 30 },
+	{ kind = "purchases", n = 2, text = "Buy 2 machines", minutes = 2, floor = 60 },
+	{ kind = "laps", n = 1, text = "Drive a clean lap", minutes = 2, floor = 100 },
+	{ kind = "purchases", n = 5, text = "Buy 5 machines", minutes = 3, floor = 200 },
+	{ kind = "earned", n = 10000, text = "Earn $10K", minutes = 3, floor = 300 },
+	{ kind = "lapUnder", n = 25, text = "Lap in under 0:25", minutes = 4, floor = 400 },
+	{ kind = "purchases", n = 10, text = "Buy 10 machines", minutes = 4, floor = 500 },
+	{ kind = "laps", n = 10, text = "Drive 10 clean laps", minutes = 5, floor = 500 },
+	{ kind = "earned", n = 1000000, text = "Earn $1M", minutes = 5, floor = 500 },
+	{ kind = "trophy", n = 1, text = "Win the Constructors' trophy", minutes = 6, floor = 1000 },
+	{ kind = "season", n = 1, text = "Start season 2", minutes = 6, floor = 1000 },
+	{ kind = "lapUnder", n = 21, text = "Lap in under 0:21", minutes = 8, floor = 1000 },
+	{ kind = "earned", n = 50000000, text = "Earn $50M", minutes = 8, floor = 1000 },
+	{ kind = "season", n = 2, text = "Start season 3", minutes = 10, floor = 2000 },
+	{ kind = "lapUnder", n = 18, text = "Lap in under 0:18", minutes = 10, floor = 2000 },
+	{ kind = "season", n = 3, text = "Start season 4", minutes = 12, floor = 2000 },
+} :: { { kind: string, n: number, text: string, minutes: number, floor: number } }
+
+-- A gift for staying: every `everyMinutes` played this visit, one claimable gift of
+-- `minutes` of income (at least `floor` times the season multiplier). They don't pile up.
+Config.Gift = { everyMinutes = 10, minutes = 3, floor = 150 }
+
 Config.DailyCooldownHours = 20
 Config.StreakBreakHours = 48
 

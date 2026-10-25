@@ -185,6 +185,25 @@ if RunService:IsClient() then
 		local bottom = shop and shop.AbsolutePosition.Y + shop.AbsoluteSize.Y
 		clientCheck("the buttons sit clear of a phone's thumbstick corner", bottom and bottom <= view.Y * 0.62,
 			bottom and ("%d of %d px"):format(bottom, view.Y))
+		local goalShown, giftText = false, nil
+		for _, d in hud:GetDescendants() do
+			if d:IsA("TextLabel") and d.Text ~= "" and d.Text == player:GetAttribute("GoalText") then
+				goalShown = true
+			elseif d:IsA("TextButton") and string.match(d.Text, "^Gift in %d+:%d%d$") then
+				giftText = d.Text
+			end
+		end
+		clientCheck("the goal panel shows the current goal", goalShown, player:GetAttribute("GoalText"))
+		clientCheck("the gift counts down", giftText, giftText)
+		game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("ClaimGift"):FireServer()
+		clientCheck("a gift claimed early is refused", waitFor(function()
+			for _, d in hud:GetDescendants() do
+				if d:IsA("TextLabel") and string.sub(d.Text, 1, 21) == "Your gift is ready in" then
+					return true
+				end
+			end
+			return false
+		end, 4))
 		local tick = game:GetService("SoundService"):FindFirstChild("PitLaneTick")
 		clientCheck("the purchase sound loads", tick and waitFor(function()
 			return (tick :: Sound).IsLoaded
@@ -271,6 +290,20 @@ if RunService:IsClient() then
 		end
 		humanoid.Sit = false
 		humanoid.Jump = true
+
+		-- redeem codes, once the server half has finished checking cash
+		task.wait(1)
+		local redeem = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Redeem")
+		local first = redeem:InvokeServer(" pitlane ")
+		clientCheck("a code works in any case and pays", string.match(tostring(first), "^Code PITLANE: %+%$"), first)
+		task.wait(1.6)
+		local again = redeem:InvokeServer("PitLane")
+		clientCheck("a code pays only once", again == "You've already used PITLANE", again)
+		task.wait(1.6)
+		local wrong = redeem:InvokeServer("NOPE")
+		clientCheck("a wrong code is turned down", wrong == "That code doesn't work", wrong)
+		clientCheck("players can't read the codes",
+			game:GetService("ReplicatedStorage"):FindFirstChild("Codes", true) == nil and (Config :: any).Codes == nil)
 	end)
 	return
 end
@@ -408,6 +441,10 @@ local function run()
 	check("the next purchase is published", player:GetAttribute("NextKey") == "press2"
 		and player:GetAttribute("NextCost") == 60, player:GetAttribute("NextKey"))
 	check("the analytics funnel logs the join", player:GetAttribute("FunnelStep") == 1, player:GetAttribute("FunnelStep"))
+	check("the first goal is to bank cash", player:GetAttribute("GoalText") == "Bank your first cash",
+		player:GetAttribute("GoalText"))
+	local giftIn = (player:GetAttribute("GiftAt") or 0) - workspace:GetServerTimeNow()
+	check("the first gift is ten minutes away", giftIn > 540 and giftIn <= 600, math.floor(giftIn))
 
 	local character = waitFor(function()
 		local c = player.Character
@@ -460,6 +497,10 @@ local function run()
 	check("the blue pad banks the cash", cash.Value >= before + pending,
 		("cash %d -> %d, pending %d"):format(before, cash.Value, pending))
 
+	check("banking meets the first goal and shows the next", waitFor(function()
+		return player:GetAttribute("GoalText") == "Buy 2 machines"
+	end, 3), player:GetAttribute("GoalText"))
+
 	local function earn(amount: number)
 		local t0 = os.clock()
 		while cash.Value < amount and os.clock() - t0 < 120 do
@@ -501,6 +542,9 @@ local function run()
 	check("the faster conveyor is bought", waitFor(function()
 		return player:GetAttribute("NextKey") == "press3"
 	end, 3), player:GetAttribute("NextKey"))
+	check("two machines meet that goal; next, drive a lap", waitFor(function()
+		return player:GetAttribute("GoalText") == "Drive a clean lap"
+	end, 3), player:GetAttribute("GoalText"))
 	check("the second raises the back wall and takes the scaffolding down", waitFor(function()
 		return has(plot, "BackWall") and not has(plot, "Scaffold")
 	end, 3))
@@ -550,6 +594,9 @@ local function run()
 		lap and ("%.2f s, expected %.2f"):format(lap, expect))
 	check("a clean lap pays", cash.Value > cashBeforeLap, ("%d -> %d"):format(cashBeforeLap, cash.Value))
 	check("and becomes the best lap", lap and player:GetAttribute("BestLap") == lap, player:GetAttribute("BestLap"))
+	check("a clean lap meets the lap goal", waitFor(function()
+		return player:GetAttribute("GoalText") == "Buy 5 machines"
+	end, 3), player:GetAttribute("GoalText"))
 	check("cutting across the infield voids the lap", waitFor(function()
 		return player:GetAttribute("LapValid") == false
 	end, 20), player:GetAttribute("LapProblem"))
@@ -558,6 +605,10 @@ local function run()
 		local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 		return car and not car.Parent and root and (root.Position - base.Position).Magnitude < 40
 	end, 10))
+	local cashBeforeCode = cash.Value
+	check("redeeming a code pays", waitFor(function()
+		return cash.Value >= cashBeforeCode + 250
+	end, 10), ("%d -> %d"):format(cashBeforeCode, cash.Value))
 
 	-- the game's own warnings: a failing analytics call or save warns once
 	local own = {}

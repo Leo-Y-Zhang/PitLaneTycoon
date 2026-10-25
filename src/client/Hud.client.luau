@@ -1,5 +1,6 @@
--- Pit Lane Tycoon HUD: cash and income, the next purchase, the shop, the new-season button,
--- toasts, and the guide line, sparks and "+$" pop-ups that show where to go next.
+-- Pit Lane Tycoon HUD: cash and income, the next purchase, the shop (and redeem codes), the
+-- race and new-season buttons, the current goal and the gift for staying, toasts, and the
+-- guide line, sparks and "+$" pop-ups that show where to go next.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -179,7 +180,7 @@ end)
 
 -- shop ------------------------------------------------------------------------------
 local shop = new("Frame", {
-	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(380, 360),
+	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(380, 410),
 	BackgroundColor3 = PANEL, Visible = false,
 }, gui)
 round(shop, 14)
@@ -190,7 +191,7 @@ new("TextLabel", {
 	TextColor3 = INK, Text = "Team shop",
 }, shop)
 local list = new("ScrollingFrame", {
-	Position = UDim2.fromOffset(14, 50), Size = UDim2.new(1, -28, 1, -110), BackgroundTransparency = 1,
+	Position = UDim2.fromOffset(14, 50), Size = UDim2.new(1, -28, 1, -164), BackgroundTransparency = 1,
 	ScrollBarThickness = 6, AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new(),
 }, shop)
 new("UIListLayout", { Padding = UDim.new(0, 8) }, list)
@@ -237,6 +238,30 @@ if rows == 0 then
 		TextColor3 = INK, TextWrapped = true, Text = "The shop opens soon. Keep building!",
 	}, list)
 end
+-- redeem codes: typed here, checked on the server (the list never reaches the player)
+local codeBox = new("TextBox", {
+	Position = UDim2.new(0, 14, 1, -106), Size = UDim2.new(1, -150, 0, 40), BackgroundColor3 = Color3.fromRGB(32, 36, 42),
+	PlaceholderText = "Have a code?", PlaceholderColor3 = Color3.fromRGB(140, 146, 156), Text = "", TextColor3 = INK,
+	Font = Enum.Font.GothamBold, TextSize = 16, ClearTextOnFocus = false,
+}, shop)
+round(codeBox, 8)
+local redeemButton = button("Redeem", GREEN, shop)
+redeemButton.Size = UDim2.fromOffset(112, 40)
+redeemButton.Position = UDim2.new(1, -126, 1, -106)
+local redeeming = false
+redeemButton.Activated:Connect(function()
+	if redeeming or codeBox.Text == "" then return end
+	redeeming = true
+	local ok, message = pcall(function()
+		return remotes:WaitForChild("Redeem"):InvokeServer(codeBox.Text)
+	end)
+	showToast(ok and tostring(message) or "Try again in a moment")
+	if ok and string.find(tostring(message), "+$", 1, true) then
+		codeBox.Text = ""
+	end
+	redeeming = false
+end)
+
 shopButton.Activated:Connect(function()
 	shop.Visible = not shop.Visible
 end)
@@ -374,12 +399,102 @@ remotes:WaitForChild("Effect").OnClientEvent:Connect(function(kind: string, arg:
 	end
 end)
 
+-- the current goal and the gift for staying, right edge (clear of the jump button) -----
+local goals = new("Frame", {
+	AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.42, 0), Size = UDim2.fromOffset(230, 150),
+	BackgroundColor3 = PANEL, BackgroundTransparency = 0.15,
+}, gui)
+round(goals, 12)
+scaled(goals)
+new("TextLabel", {
+	Position = UDim2.fromOffset(12, 8), Size = UDim2.new(1, -24, 0, 14), BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBlack, TextSize = 12, TextColor3 = Color3.fromRGB(255, 205, 60),
+	TextXAlignment = Enum.TextXAlignment.Left, Text = "GOAL",
+}, goals)
+local goalReward = new("TextLabel", {
+	Position = UDim2.fromOffset(12, 8), Size = UDim2.new(1, -24, 0, 14), BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = GREEN, TextXAlignment = Enum.TextXAlignment.Right, Text = "",
+}, goals)
+local goalText = new("TextLabel", {
+	Position = UDim2.fromOffset(12, 26), Size = UDim2.new(1, -24, 0, 22), BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBold, TextScaled = true, TextColor3 = INK, TextXAlignment = Enum.TextXAlignment.Left, Text = "",
+}, goals)
+new("UITextSizeConstraint", { MaxTextSize = 17 }, goalText)
+local goalBar = new("Frame", {
+	Position = UDim2.fromOffset(12, 54), Size = UDim2.new(1, -24, 0, 16), BackgroundColor3 = Color3.fromRGB(40, 44, 50),
+}, goals)
+round(goalBar, 8)
+local goalFill = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.fromRGB(255, 205, 60) }, goalBar)
+round(goalFill, 8)
+local goalCount = new("TextLabel", {
+	Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextSize = 12,
+	TextColor3 = INK, TextStrokeTransparency = 0.5, Text = "", ZIndex = 2,
+}, goalBar)
+local giftButton = button("Gift", Color3.fromRGB(60, 64, 70), goals)
+giftButton.Position = UDim2.fromOffset(12, 88)
+giftButton.Size = UDim2.new(1, -24, 0, 48)
+giftButton.TextSize = 16
+giftButton.Activated:Connect(function()
+	remotes:WaitForChild("ClaimGift"):FireServer()
+end)
+
+local function lapText(seconds: number): string
+	return ("%d:%05.2f"):format(seconds // 60, seconds % 60)
+end
+
+local function refreshGoal()
+	local text = player:GetAttribute("GoalText") or ""
+	if text == "" then
+		goalText.Text = "Every goal done!"
+		goalReward.Text = ""
+		goalFill.Size = UDim2.fromScale(1, 1)
+		goalCount.Text = ""
+		return
+	end
+	goalText.Text = text
+	goalReward.Text = "+" .. money(player:GetAttribute("GoalReward") or 0)
+	local kind = player:GetAttribute("GoalKind")
+	local have, need = player:GetAttribute("GoalHave") or 0, math.max(player:GetAttribute("GoalNeed") or 1, 1)
+	goalFill.Size = UDim2.fromScale(math.clamp(have / need, 0, 1), 1)
+	if kind == "earned" then
+		goalCount.Text = money(have) .. " / " .. money(need)
+	elseif kind == "lapUnder" then
+		local best = player:GetAttribute("BestLap") or 0
+		goalCount.Text = best > 0 and ("Best lap " .. lapText(best)) or "Press Race to drive"
+	elseif kind == "trophy" or kind == "season" then
+		goalCount.Text = ""
+	else
+		goalCount.Text = ("%d / %d"):format(have, need)
+	end
+end
+
+-- the gift counts down here; the server decides when it is ready
+local function refreshGift()
+	local left = (player:GetAttribute("GiftAt") or math.huge) - workspace:GetServerTimeNow()
+	if left <= 0 then
+		giftButton.Text = "Claim your gift!"
+		giftButton.BackgroundColor3 = GREEN
+	else
+		local s = math.ceil(left)
+		giftButton.Text = ("Gift in %d:%02d"):format(s // 60, s % 60)
+		giftButton.BackgroundColor3 = Color3.fromRGB(60, 64, 70)
+	end
+end
+task.spawn(function()
+	while true do
+		refreshGift()
+		task.wait(1)
+	end
+end)
+
 -- keep it current -------------------------------------------------------------------
 local function refreshAll()
 	refreshTop()
 	refreshGuide()
 	seasonButton.Visible = player:GetAttribute("HasTrophy") == true
 	raceButton.Text = player:GetAttribute("Driving") == true and "Leave car" or "Race"
+	refreshGoal()
+	refreshGift()
 end
 player.AttributeChanged:Connect(refreshAll)
 workspace:GetAttributeChangedSignal("HappyHour"):Connect(refreshTop)
