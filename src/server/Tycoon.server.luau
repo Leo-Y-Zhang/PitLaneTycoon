@@ -715,7 +715,7 @@ local function areFriends(a: Player, b: Player): boolean
 	local key = lo .. ":" .. hi
 	if friendCache[key] == nil then
 		local ok, result = pcall(function()
-			return a:IsFriendsWith(b.UserId)
+			return a:IsFriendsWithAsync(b.UserId)
 		end)
 		if not ok then return false end -- ask again next time
 		friendCache[key] = result
