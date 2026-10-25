@@ -102,6 +102,52 @@ do -- the crate's price
 	check("crew unlocks after a few machines, before the trophy", crew.unlockPurchases >= 2 and crew.unlockPurchases <= 10)
 end
 
+do -- Scout's pick
+	local pick = crew.pick
+	local total = 0
+	for _, w in pick.weights do
+		total += w
+	end
+	check("the pick's rarity weights add up to 1", math.abs(total - 1) < 1e-9, total)
+	local start = math.floor(1793000000 / (pick.minutes * 60)) -- windows around October 2026
+	local counts, seen, changes, last = {}, {}, 0, nil
+	local n = 20000
+	for w = start, start + n - 1 do
+		local m = Crew.pick(w, members, pick.weights)
+		counts[m.rarity] = (counts[m.rarity] or 0) + 1
+		seen[m.key] = true
+		changes += (last and last ~= m.key) and 1 or 0
+		last = m.key
+	end
+	local fair = true
+	for tier, weight in pick.weights do
+		fair = fair and math.abs((counts[tier] or 0) / n - weight) < 0.01
+	end
+	check("each rarity is the pick as often as its weight", fair)
+	local everyone = true
+	for _, m in members do
+		everyone = everyone and seen[m.key] == true
+	end
+	check("everyone gets to be the pick", everyone)
+	check("the pick usually changes each time", changes / n > 0.6, changes / n)
+	check("the same window gives the same pick everywhere",
+		Crew.pick(start + 7, members, pick.weights).key == Crew.pick(start + 7, members, pick.weights).key)
+	-- hunting one member with crates takes 1 / (its rarity's chance / members of that rarity)
+	local bargain, worst = true, nil
+	for tier, r in rarities do
+		local size = 0
+		for _, m in members do
+			size += m.rarity == tier and 1 or 0
+		end
+		local hunt = size / r.chance
+		if pick.crates[tier] >= hunt then
+			bargain, worst = false, ("%s: %d crates vs %.1f"):format(r.name, pick.crates[tier], hunt)
+		end
+	end
+	check("a pick costs fewer crates than hunting that member", bargain, worst)
+	check("a Legendary pick is the rarest", pick.weights[#pick.weights] < pick.weights[1])
+end
+
 print(("%d passed, %d failed"):format(passed, failed))
 if failed > 0 then
 	error("crew tests failed")

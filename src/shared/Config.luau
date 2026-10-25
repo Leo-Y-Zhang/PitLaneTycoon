@@ -130,6 +130,11 @@ Config.Crew = {
 	slots = 3,
 	unlockPurchases = 5,
 	crate = { minutes = 5, floor = 300 },
+	-- Scout's pick: one member on offer at a fixed price (`crates` times the crate price, by
+	-- rarity), the same pick in every server, changing every `minutes`; each team may hire it
+	-- once. `weights` = how often each rarity is the pick. A pick costs fewer crates than
+	-- hunting that member with crates would (tests/Crew.spec.luau).
+	pick = { minutes = 10, weights = { 0.35, 0.35, 0.22, 0.08 }, crates = { 2, 5, 14, 35 } },
 	rarities = { -- commonest first; colours as RGB
 		{ name = "Common", chance = 0.62, colour = { 190, 196, 204 } },
 		{ name = "Rare", chance = 0.27, colour = { 60, 150, 255 } },
