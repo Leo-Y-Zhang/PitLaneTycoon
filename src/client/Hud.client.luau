@@ -90,6 +90,32 @@ round(top, 12)
 topFrame = top
 topScale = new("UIScale", {}, top)
 new("UIStroke", { Color = RED, Thickness = 2 }, top)
+-- the live event, on a chequered strip under the top bar
+local eventBar = new("Frame", {
+	Name = "EventBar", Position = UDim2.new(0, 0, 1, 6), Size = UDim2.new(1, 0, 0, 34), BackgroundColor3 = Color3.fromRGB(255, 205, 60),
+	Visible = false,
+}, top)
+round(eventBar, 8)
+local eventLabel = new("TextLabel", {
+	Size = UDim2.new(1, -16, 1, 0), Position = UDim2.fromOffset(8, 0), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack,
+	TextScaled = true, TextColor3 = Color3.fromRGB(17, 20, 24), Text = "",
+}, eventBar)
+new("UITextSizeConstraint", { MaxTextSize = 17 }, eventLabel)
+local function refreshEvent()
+	local name = workspace:GetAttribute("EventName") or ""
+	local left = (workspace:GetAttribute("EventEnds") or 0) - workspace:GetServerTimeNow()
+	eventBar.Visible = name ~= "" and left > 0
+	if eventBar.Visible then
+		local s = math.ceil(left)
+		eventLabel.Text = ("%s  %d:%02d  %s"):format(string.upper(name), s // 60, s % 60, workspace:GetAttribute("EventText") or "")
+	end
+end
+task.spawn(function()
+	while true do
+		refreshEvent()
+		task.wait(0.5)
+	end
+end)
 local cashLabel = new("TextLabel", {
 	Size = UDim2.new(1, -20, 0, 34), Position = UDim2.fromOffset(10, 4), BackgroundTransparency = 1,
 	Font = Enum.Font.GothamBlack, TextSize = 28, TextColor3 = GREEN, Text = "$0",
