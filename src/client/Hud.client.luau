@@ -416,6 +416,37 @@ remotes:WaitForChild("Effect").OnClientEvent:Connect(function(kind: string, arg:
 	end
 end)
 
+-- the first visit: three lines on how the game works, until "Let's go" or the first buy --
+local welcome = new("Frame", {
+	Name = "Welcome", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(440, 250),
+	BackgroundColor3 = PANEL, BackgroundTransparency = 0.05, Visible = false,
+}, gui)
+round(welcome, 14)
+scaled(welcome)
+new("UIStroke", { Color = Color3.fromRGB(255, 205, 60), Thickness = 2 }, welcome)
+new("TextLabel", {
+	Position = UDim2.fromOffset(18, 12), Size = UDim2.new(1, -36, 0, 34), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack,
+	TextSize = 22, TextColor3 = INK, Text = "Welcome to your garage",
+}, welcome)
+for i, line in {
+	"Your presses make car parts. They ride the conveyor to scrutineering and earn cash.",
+	"Bank the cash on the blue pad, then step on the red pad to buy the next machine.",
+	"Press Race any time to drive your team's car round the track.",
+} do
+	new("TextLabel", {
+		Position = UDim2.fromOffset(18, 52 + (i - 1) * 44), Size = UDim2.new(1, -36, 0, 40), BackgroundTransparency = 1,
+		Font = Enum.Font.Gotham, TextSize = 15, TextWrapped = true, TextColor3 = INK, TextXAlignment = Enum.TextXAlignment.Left,
+		Text = i .. ".  " .. line,
+	}, welcome)
+end
+local letsGo = button("Let's go", GREEN, welcome)
+letsGo.AnchorPoint = Vector2.new(0.5, 1)
+letsGo.Position = UDim2.new(0.5, 0, 1, -14)
+letsGo.Activated:Connect(function()
+	welcome.Visible = false
+	remotes:WaitForChild("Welcomed"):FireServer()
+end)
+
 -- the current goal and the gift for staying, right edge (clear of the jump button) -----
 local goals = new("Frame", {
 	Name = "GoalPanel", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.52, 0), Size = UDim2.fromOffset(230, 150),
@@ -520,6 +551,7 @@ local function refreshAll()
 	raceButton.Text = player:GetAttribute("Driving") == true and "Leave car" or "Race"
 	refreshGoal()
 	refreshGift()
+	welcome.Visible = player:GetAttribute("Welcome") == true
 end
 player.AttributeChanged:Connect(refreshAll)
 workspace:GetAttributeChangedSignal("HappyHour"):Connect(refreshTop)
