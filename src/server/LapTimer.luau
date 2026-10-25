@@ -18,6 +18,7 @@ export type Options = {
 	nearest: (number, number) -> (number, number), -- (x, z) -> angle of the nearest centre-line point, distance from it
 	limit: number, -- furthest a car may be from the centre line (half the width plus some kerb)
 	maxSpeed: number, -- the car's top speed, studs per second
+	reverse: boolean?, -- the Reverse GP: laps run the other way round
 }
 export type Event = { kind: string, time: number?, valid: boolean?, reason: string? }
 export type Timer = {
@@ -45,6 +46,9 @@ end
 -- time the car crosses the line, or { kind = "lap", time, valid, reason } for each lap after.
 function LapTimer.sample(timer: Timer, t: number, x: number, z: number): Event?
 	local a, dist = timer.opts.nearest(x, z)
+	if timer.opts.reverse then
+		a = (TAU - a) % TAU -- mirrored, so driving the other way round counts up just the same
+	end
 	local prev = timer.u
 	if prev == nil then
 		-- the cars start just behind the line, so read the angle as -pi..pi

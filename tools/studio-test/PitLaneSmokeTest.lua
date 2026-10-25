@@ -257,6 +257,35 @@ local function photoShoot()
 			break
 		end
 	end
+	-- then a Reverse GP lap (open in the photo garage's season): out of the car, back in the other
+	-- way round, and along the centre line backwards at 50 studs/s; the server half checks the time
+	local driveRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Drive")
+	driveRemote:FireServer(false)
+	waitFor(function()
+		return humanoid and humanoid.SeatPart == nil
+	end, 5)
+	task.wait(1)
+	driveRemote:FireServer(true, "reverse")
+	local reverseSeat = humanoid and waitFor(function()
+		return humanoid.SeatPart
+	end, 8)
+	if reverseSeat then
+		local shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+		local TrackShape = require(shared:WaitForChild("TrackShape")) :: any
+		local track = (require(shared:WaitForChild("Config")) :: any).Track
+		local car = reverseSeat.Parent :: Model
+		local a = 0.04
+		while a > -2 * math.pi - 0.3 do
+			local dt = RunService.Heartbeat:Wait()
+			local x1, z1 = TrackShape.point(track, a)
+			local x2, z2 = TrackShape.point(track, a - 0.001)
+			a -= 50 * dt / (math.sqrt((x2 - x1) ^ 2 + (z2 - z1) ^ 2) / 0.001)
+			local x, z = TrackShape.point(track, a)
+			local tx, tz = TrackShape.tangent(track, a)
+			local at = Vector3.new(x, 1.1, z)
+			car:PivotTo(CFrame.lookAt(at, at - Vector3.new(tx, 0, tz)))
+		end
+	end
 	print(TAG, "PHOTOS-DONE")
 end
 
@@ -557,11 +586,25 @@ if SCENARIO == "photo" then
 		ratio = ((player and player:GetAttribute("Pending") or 0) - before) * 3 / math.max(perMin, 1)
 	end)
 	task.delay(45, function()
+		-- the client finishes with a Reverse GP lap at 50 studs/s
+		local player = Players:GetPlayers()[1]
+		local lap = player and waitFor(function()
+			return player:GetAttribute("BestLapReverse") ~= 0 and player:GetAttribute("BestLapReverse")
+		end, 80)
+		local shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+		local length = (require(shared:WaitForChild("TrackShape")) :: any).length((require(shared:WaitForChild("Config")) :: any).Track)
+		local expect = length / 50
+		local timed = lap and math.abs(lap - expect) / expect < 0.05
+		print(TAG, (timed and "PASS " or "FAIL ")
+			.. ("a Reverse GP lap is timed by the server (%s s, expected %.2f)"):format(tostring(lap), expect))
+		local apart = player and player:GetAttribute("BestLap") == 0
+		print(TAG, (apart and "PASS " or "FAIL ") .. "it does not count as a Grand Prix lap")
 		local ok = ratio > 0.85 and ratio < 1.15
 		print(TAG, (ok and "PASS " or "FAIL ") .. ("a full garage earns what the HUD says (%.2f of it)"):format(ratio))
 		print(TAG, ("PERF one full garage: server step %.1f ms (worst %.1f), physics %.0f fps, %d parts in the world, %d on the line"):format(
 			perf.step * 1000, perf.worst * 1000, perf.fps, perf.parts, perf.drops))
-		StudioTestService:EndTest({ passed = ok and 1 or 0, total = 1, errors = errors, warnings = warnings })
+		local passed = (ok and 1 or 0) + (timed and 1 or 0) + (apart and 1 or 0)
+		StudioTestService:EndTest({ passed = passed, total = 3, errors = errors, warnings = warnings })
 	end)
 	return
 end
@@ -670,6 +713,8 @@ local function run()
 		and player:GetAttribute("NextCost") == 60, player:GetAttribute("NextKey"))
 	check("the analytics funnel logs the join", player:GetAttribute("FunnelStep") == 1, player:GetAttribute("FunnelStep"))
 	check("a new player gets the welcome card", player:GetAttribute("Welcome") == true, player:GetAttribute("Welcome"))
+	check("the Reverse GP is locked in the first season", player:GetAttribute("ReverseUnlocked") == false,
+		player:GetAttribute("ReverseUnlocked"))
 	check("the first goal is to bank cash", player:GetAttribute("GoalText") == "Bank your first cash",
 		player:GetAttribute("GoalText"))
 	local giftIn = (player:GetAttribute("GiftAt") or 0) - workspace:GetServerTimeNow()
