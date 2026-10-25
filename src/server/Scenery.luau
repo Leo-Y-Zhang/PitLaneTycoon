@@ -444,6 +444,30 @@ function Scenery.car(parent: Instance, cf: CFrame, colour: Color3, season: numbe
 		p(x * 0.72, 1.0, -0.72, 0.5, 0.55, 0.06, CARBON) -- intakes
 	end
 	wedge(0, 2.05, 4.0, 0.9, 1.2, 1.6, body, math.pi) -- engine cover sloping to the rear
+	-- a thin carbon bar from a to b (suspension arms, the halo's sides, mirror stalks)
+	local function bar(a: Vector3, b: Vector3, thick: number, c: Color3?)
+		local piece = block(car, cf * CFrame.lookAt((a + b) / 2, b), Vector3.new(thick, thick, (b - a).Magnitude),
+			c or CARBON, Enum.Material.Metal)
+		return piece
+	end
+	for _, side in { -1, 1 } do
+		-- double wishbones out to each wheel, front and rear
+		bar(Vector3.new(side * 0.55, 1.35, -3.0), Vector3.new(side * 1.5, 1.05, -3.3), 0.1)
+		bar(Vector3.new(side * 0.55, 0.75, -2.8), Vector3.new(side * 1.5, 0.7, -3.3), 0.1)
+		bar(Vector3.new(side * 0.45, 1.6, 3.2), Vector3.new(side * 1.35, 1.4, 3.4), 0.1)
+		bar(Vector3.new(side * 0.45, 0.8, 3.0), Vector3.new(side * 1.35, 0.75, 3.4), 0.1)
+		-- the halo's arms from the cockpit sides up to its top bar
+		bar(Vector3.new(side * 0.45, 1.8, 0.15), Vector3.new(side * 0.12, 2.3, -0.25), 0.13)
+		-- mirrors on stalks
+		bar(Vector3.new(side * 0.95, 1.6, -1.7), Vector3.new(side * 1.3, 1.85, -1.75), 0.07)
+		p(side * 1.4, 1.88, -1.75, 0.35, 0.18, 0.14, body)
+	end
+	p(0, 0.78, -5.25, 3.7, 0.1, 0.4, trim) -- the front wing's second element
+	p(0, 1.6, 5.0, 2.5, 0.12, 0.4, CARBON) -- beam wing
+	for _, x in { -0.9, -0.3, 0.3, 0.9 } do
+		p(x, 0.8, 5.3, 0.08, 0.45, 0.9, CARBON) -- diffuser strakes
+	end
+	p(0, 2.86, 0.8, 0.55, 0.1, 0.2, Color3.fromRGB(255, 205, 60)) -- the T-cam on the airbox
 	if driver then
 		local helmet = p(0, 2.05, -0.75, 0.85, 0.85, 0.85, trim == CARBON and WHITE or trim)
 		helmet.Shape = Enum.PartType.Ball
@@ -453,6 +477,9 @@ function Scenery.car(parent: Instance, cf: CFrame, colour: Color3, season: numbe
 		for _, x in { -1.95, 1.95 } do
 			local wheel = p(x, w[2] / 2, w[1], w[3], w[2], w[2], CARBON)
 			wheel.Shape = Enum.PartType.Cylinder
+			-- the compound's band round the sidewall, between the tyre's edge and the rim
+			local band = p(x, w[2] / 2, w[1], w[3] + 0.01, w[2] * 0.8, w[2] * 0.8, Color3.fromRGB(255, 205, 60))
+			band.Shape = Enum.PartType.Cylinder
 			local rim = p(x + (x > 0 and 0.04 or -0.04), w[2] / 2, w[1], w[3] - 0.05, w[2] * 0.55, w[2] * 0.55, trim, Enum.Material.Metal)
 			rim.Shape = Enum.PartType.Cylinder
 		end
