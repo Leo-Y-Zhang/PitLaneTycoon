@@ -384,8 +384,10 @@ function Scenery.track(shape: TrackShape.Shape)
 		Enum.Material.Metal)
 	sign(beam, Enum.NormalId.Front, "TIME TRIAL", Color3.fromRGB(255, 205, 60))
 	sign(beam, Enum.NormalId.Back, "TIME TRIAL", Color3.fromRGB(255, 205, 60))
-	for k = -2, 2 do
-		block(folder, start * CFrame.new(k * 2.2, 13, -0.4), Vector3.new(1, 1, 0.6), Color3.fromRGB(255, 40, 40), Enum.Material.Neon)
+	for k = -2, 2 do -- the start lights (Drive.client.luau runs each driver's start on them)
+		local light = block(folder, start * CFrame.new(k * 2.2, 13, -0.4), Vector3.new(1, 1, 0.6), Color3.fromRGB(255, 40, 40),
+			Enum.Material.Neon)
+		light.Name = "StartLight" .. (k + 3)
 	end
 end
 

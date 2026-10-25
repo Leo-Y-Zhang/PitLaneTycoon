@@ -79,9 +79,10 @@ local function auditAudio()
 		bad += 1
 		say("BAD no Config.Audio")
 	end
-	for _, query in { { "Music", "racing" }, { "Music", "upbeat electronic" }, { "Music", "rock drive" },
-		{ "Music", "funk" }, { "Sound", "button click" }, { "Sound", "cash register" }, { "Sound", "coin" },
-		{ "Sound", "whoosh" }, { "Sound", "race car engine" }, { "Sound", "success" }, { "Sound", "construction" } } do
+	local SEARCH = {} -- run.py --search fills this
+	local queries = #SEARCH > 0 and SEARCH or { { "Music", "racing" }, { "Music", "upbeat electronic" },
+		{ "Sound", "button click" }, { "Sound", "cash register" }, { "Sound", "whoosh" }, { "Sound", "race car engine" } }
+	for _, query in queries do
 		local ok, result = pcall(function()
 			local params = Instance.new("AudioSearchParams")
 			params.SearchKeyword = query[2]
@@ -98,6 +99,9 @@ local function auditAudio()
 			end
 			local creator = item.Creator or item.creator or {}
 			local name = creator.Name or creator.name or item.CreatorName or "?"
+			if not LICENSED[name] then
+				continue -- only what any experience may play
+			end
 			say(("FOUND %s | %s | %s | %s | %ss | by %s"):format(query[2], tostring(item.Id), tostring(item.Title),
 				tostring(item.Artist), tostring(item.Duration), tostring(name)))
 		end
@@ -416,11 +420,27 @@ if RunService:IsClient() then
 		local frame = panel and panel:FindFirstChildOfClass("Frame")
 		clientCheck("the lap panel shows while driving", frame and frame.Visible)
 
+		-- the start: the lights count up on the panel, then GO
+		local clockLabel = frame and frame:FindFirstChildOfClass("TextLabel")
+		local sawLights = waitFor(function()
+			return clockLabel and string.find(clockLabel.Text, "●", 1, true) ~= nil
+		end, 3)
+		clientCheck("the start lights count down", sawLights, clockLabel and clockLabel.Text)
+		clientCheck("then the lights go out: GO", waitFor(function()
+			return clockLabel and clockLabel.Text == "GO!"
+		end, 6), clockLabel and clockLabel.Text)
+		local engineSound = game:GetService("SoundService"):FindFirstChild("PitLane_engine") :: Sound?
+		clientCheck("the engine runs", engineSound and engineSound.IsLoaded and engineSound.IsPlaying)
+
 		-- hold the brake (it reverses) for three seconds, after the controls have written theirs
 		local hold = RunService.Stepped:Connect(function()
 			seat.ThrottleFloat = -1
 		end)
-		task.wait(3)
+		task.wait(2.5)
+		local speedLabel = frame and frame:FindFirstChild("Speed") :: TextLabel?
+		local reading = speedLabel and tonumber(string.match(speedLabel.Text, "^(%d+) km/h$"))
+		clientCheck("the speed shows in km/h", reading and reading > 10, speedLabel and speedLabel.Text)
+		task.wait(0.5)
 		hold:Disconnect()
 
 		local function place(a: number, off: number)
@@ -768,7 +788,7 @@ local function run()
 	check("the player's computer drives it", chassis and chassis:GetNetworkOwner() == player)
 	if chassis then
 		local from = chassis.Position
-		task.wait(3.5)
+		task.wait(9) -- the start lights hold the car about four seconds first
 		local moved = (chassis.Position - from).Magnitude
 		check("the pedals move the car (it reverses under the brake)", moved > 15, math.floor(moved))
 	end

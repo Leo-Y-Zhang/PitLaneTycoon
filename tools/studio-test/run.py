@@ -78,6 +78,7 @@ def main() -> int:
     ap.add_argument("--keep-open", action="store_true", help="leave the Studio window open afterwards")
     ap.add_argument("--audio", action="store_true",
                     help="check every sound id in Config.Audio was made by Roblox, and list Roblox-made candidates")
+    ap.add_argument("--search", help='with --audio: what to look for, e.g. "Sound:engine loop;Music:rock"')
     ap.add_argument("--photos", action="store_true",
                     help="take thumbnail shots of a finished garage instead of testing (needs --shots)")
     a = ap.parse_args()
@@ -93,6 +94,10 @@ def main() -> int:
         source = source.replace('local SCENARIO = "smoke"', 'local SCENARIO = "photo"', 1)
     elif a.audio:
         source = source.replace('local SCENARIO = "smoke"', 'local SCENARIO = "audio"', 1)
+        if a.search:
+            pairs = [q.split(":", 1) for q in a.search.split(";") if ":" in q]
+            lua = ", ".join('{ "%s", %s }' % (kind.strip(), json.dumps(text.strip())) for kind, text in pairs)
+            source = source.replace("local SEARCH = {}", "local SEARCH = { " + lua + " }", 1)
     PLUGIN.write_text(source, encoding="utf-8")
     locked = screen_locked()
     if locked:

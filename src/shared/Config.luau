@@ -90,6 +90,10 @@ Config.Audio = {
 	cash = 9113728625, -- Pro Sound Effects: Cash Register 1
 	buy = 9113728756, -- Pro Sound Effects: Cash Register 5
 	build = 9120716440, -- Pro Sound Effects: Whoosh Fast Swish By 4
+	engine = 9113002130, -- Pro Sound Effects: 1992 Pontiac Grand Prix Race Car 1 (looped, pitched by speed)
+	skid = 9120399077, -- Pro Sound Effects: Vehicle Skids Long Heavy Tire Squeal 3
+	light = 9117060347, -- Pro Sound Effects: Nasa Transmission Beep 1 (each start light)
+	go = 9117060368, -- Pro Sound Effects: Nasa Transmission Beep 3 (lights out)
 	-- APM Music: Windows Down (Kosinus), Racing Mind (Thomas Balmforth), Big League (c)
 	-- (Sacha Collisson), Rock Driver (Richard Myhill)
 	music = { 9044706933, 1836950435, 1837768143, 1840321341 },

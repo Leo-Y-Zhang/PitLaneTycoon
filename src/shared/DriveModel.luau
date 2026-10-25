@@ -46,4 +46,15 @@ function DriveModel.step(speed: number, throttle: number, steer: number, dt: num
 	return speed, turn
 end
 
+-- The start: five red lights come on one a second apart, then after a short hold they all
+-- go out and the car may go. Returns how many are lit and whether it is GO.
+DriveModel.LightGap = 0.7
+function DriveModel.lights(elapsed: number, hold: number): (number, boolean)
+	local lit = math.clamp(math.floor(elapsed / DriveModel.LightGap), 0, 5)
+	if elapsed >= 5 * DriveModel.LightGap + hold then
+		return 0, true
+	end
+	return lit, false
+end
+
 return DriveModel
