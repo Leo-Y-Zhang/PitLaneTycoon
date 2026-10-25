@@ -231,16 +231,27 @@ local seasonButton = button("New season", Color3.fromRGB(200, 150, 20), bar)
 seasonButton.LayoutOrder = 4
 seasonButton.Visible = false
 -- the time trial: into your car on the grid, or back out to the garage. Once the Reverse GP
--- is open, Race asks which way round first.
+-- is open, Race asks which layout first (the Endurance circuit joins them in season 3).
 local chooser = new("Frame", {
 	Name = "LayoutChooser", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 172, 0.42, 0),
-	Size = UDim2.fromOffset(150, 98), BackgroundTransparency = 1, Visible = false,
+	Size = UDim2.fromOffset(150, 152), BackgroundTransparency = 1, Visible = false,
 }, gui)
 new("UIListLayout", { FillDirection = Enum.FillDirection.Vertical, Padding = UDim.new(0, 10) }, chooser)
 scaled(chooser)
-for _, choice in { { "Grand Prix", "gp", Color3.fromRGB(28, 86, 214) }, { "Reverse GP", "reverse", Color3.fromRGB(120, 60, 200) } } do
+for _, choice in {
+	{ "Grand Prix", "gp", Color3.fromRGB(28, 86, 214) },
+	{ "Reverse GP", "reverse", Color3.fromRGB(120, 60, 200) },
+	{ "Endurance", "long", Color3.fromRGB(214, 110, 20) },
+} do
 	local b = button(choice[1], choice[3], chooser)
 	b.Name = choice[2]
+	if choice[2] == "long" then
+		local function show()
+			b.Visible = player:GetAttribute("LongUnlocked") == true
+		end
+		player:GetAttributeChangedSignal("LongUnlocked"):Connect(show)
+		show()
+	end
 	b.Activated:Connect(function()
 		chooser.Visible = false
 		remotes:WaitForChild("Drive"):FireServer(true, choice[2])

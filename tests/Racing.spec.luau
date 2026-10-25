@@ -7,7 +7,7 @@ local TrackShape = require("../src/shared/TrackShape")
 local DriveModel = require("../src/shared/DriveModel")
 local LapTimer = require("../src/server/LapTimer")
 
-local shape = Config.Track
+local shape = Config.Track -- the circuit the helpers below drive (the Endurance block swaps it)
 local failed, passed = 0, 0
 local function check(name: string, ok: any, detail: any?)
 	if ok then
@@ -20,12 +20,11 @@ local function check(name: string, ok: any, detail: any?)
 end
 
 -- the track -----------------------------------------------------------------------------
-do
-	local points = TrackShape.samples(shape, 2000)
-	local inner, tightest = math.huge, math.huge
+-- the tightest bend: the smallest circle through three neighbouring points
+local function tightestBend(s: any): number
+	local points = TrackShape.samples(s, 2000)
+	local tightest = math.huge
 	for i, p in points do
-		inner = math.min(inner, math.sqrt(p.x * p.x + p.z * p.z) - shape.halfWidth)
-		-- the radius of the circle through three neighbouring points
 		local a, c = points[(i - 2) % #points + 1], points[i % #points + 1]
 		local ab = math.sqrt((p.x - a.x) ^ 2 + (p.z - a.z) ^ 2)
 		local bc = math.sqrt((c.x - p.x) ^ 2 + (c.z - p.z) ^ 2)
@@ -35,6 +34,12 @@ do
 			tightest = math.min(tightest, ab * bc * ca / (4 * area))
 		end
 	end
+	return tightest
+end
+
+do
+	local inner = TrackShape.extent(shape)
+	local tightest = tightestBend(shape)
 	-- a garage reaches out to its back corners: 26 studs behind its centre, 32 to each side
 	local garage = math.sqrt((Config.PlotRadius + 26) ^ 2 + 32 ^ 2)
 	check("the track clears every garage, with grass between", inner - 3 > garage + 3,
@@ -237,6 +242,26 @@ do -- reversing over the line and going again
 	check("driving back over the line and forwards again is not a lap", #back == 0 and #again == 0, #back + #again)
 	local lap = drive(t, 0.5, TAU + 0.2, 40, 0.1, now3)
 	check("the lap still ends at the line", lap[1] and lap[1].kind == "lap", lap[1] and lap[1].kind)
+end
+
+-- the Endurance circuit: a longer loop round the outside of the Grand Prix track --------
+do
+	local long = Config.LongTrack
+	local _, gpOuter = TrackShape.extent(Config.Track)
+	local inner, outer = TrackShape.extent(long)
+	check("the Endurance circuit runs outside the Grand Prix track, with grass between", inner > gpOuter + 20,
+		("inner edge %.0f, Grand Prix outer edge %.0f"):format(inner, gpOuter))
+	check("and inside 400 studs of the spawn", outer < 400, outer)
+	check("no Endurance bend is tighter than 40 studs", tightestBend(long) >= 40, tightestBend(long))
+	local ratio = TrackShape.length(long) / length
+	check("an Endurance lap is 1.5 to 2 Grand Prix laps", ratio >= 1.5 and ratio <= 2, ratio)
+	check("it opens after the Reverse GP", long.fromSeason > Config.Track.reverseFromSeason, long.fromSeason)
+	shape = long -- the helpers above now drive the Endurance circuit
+	local events = drive(timer(), -0.04, TAU + 0.3, 40, 0.1, 100)
+	local lap = events[2]
+	local expect = TrackShape.length(long) / 40
+	check("an Endurance lap is timed to within 1%", lap and lap.valid and math.abs(lap.time - expect) / expect < 0.01,
+		lap and ("%.2f vs %.2f"):format(lap.time, expect))
 end
 
 print(("%d passed, %d failed"):format(passed, failed))
