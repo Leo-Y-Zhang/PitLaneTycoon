@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DataStoreService = game:GetService("DataStoreService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local Debris = game:GetService("Debris")
+local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
@@ -13,6 +14,7 @@ local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Co
 local Scenery = require(script.Parent:WaitForChild("Scenery"))
 local SaveLock = require(script.Parent:WaitForChild("SaveLock"))
 local Racing = require(script.Parent:WaitForChild("Racing"))
+local GaragePlan = require(script.Parent:WaitForChild("GaragePlan"))
 local Analytics = require(script.Parent:WaitForChild("Analytics"))
 -- this server's name on a save lock (Studio has no JobId)
 local JOB = game.JobId ~= "" and game.JobId or ("studio-" .. HttpService:GenerateGUID(false))
@@ -382,9 +384,55 @@ local function build(player: Player, item)
 	end
 end
 
+-- machines bought this season (the free first press does not count)
+local function purchasesOf(st: State): number
+	local n = -1
+	for _ in st.data.bought do
+		n += 1
+	end
+	return math.max(0, n)
+end
+
+-- a new piece rises out of the floor
+local function rise(model: Model)
+	for _, p in model:GetDescendants() do
+		if p:IsA("BasePart") then
+			local final = p.CFrame
+			p.CFrame = final - Vector3.new(0, 10, 0)
+			TweenService:Create(p, TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CFrame = final }):Play()
+		end
+	end
+end
+
+-- put the garage's pieces and building-site props in line with the team's progress (st nil =
+-- a free plot, all building site)
+local function refreshGarage(plot, st: State?, animate: boolean?)
+	local up = GaragePlan.built(Config.GaragePieces, st and purchasesOf(st) or 0, st and st.data.season or 0)
+	for _, piece in Config.GaragePieces do
+		local have = plot.garage:FindFirstChild(piece.name)
+		if up[piece.name] and not have then
+			local model = Scenery.garagePiece(piece.name, plot.garage, plot.cf, plot.team)
+			if animate then
+				rise(model)
+			end
+		elseif have and not up[piece.name] then
+			have:Destroy()
+		end
+	end
+	for name, standing in GaragePlan.site(Config.GaragePieces, up) do
+		local have = plot.garage:FindFirstChild(name)
+		if standing and not have then
+			Scenery.siteProp(name, plot.garage, plot.cf)
+		elseif have and not standing then
+			have:Destroy()
+		end
+	end
+end
+
 local function rebuildPlot(player: Player)
 	local st = states[player]
 	local plot = st.plot
+	refreshGarage(plot, st)
 	plot.items:ClearAllChildren()
 	plot.drops:ClearAllChildren()
 	plot.pressLabels = {}
@@ -415,6 +463,13 @@ local function tryBuy(player: Player, index: number)
 	publish(player)
 	notify:FireClient(player, "Bought " .. item.name)
 	effect:FireClient(player, "bought", item.key)
+	refreshGarage(st.plot, st, true)
+	local piece = GaragePlan.newPiece(Config.GaragePieces, purchasesOf(st), st.data.season)
+	if piece then
+		task.delay(1.8, function() -- after the "Bought" message
+			notify:FireClient(player, "Your garage grows: " .. piece.label)
+		end)
+	end
 	Analytics.spent(player, item.cost, st.data.cash, Enum.AnalyticsEconomyTransactionType.Shop, item.key)
 	local purchases = -1 -- the first press is free
 	for _ in st.data.bought do
@@ -447,7 +502,11 @@ local function makePlot(index: number)
 		Color = Color3.fromRGB(46, 52, 58), Material = Enum.Material.Concrete, Parent = model })
 	local sign = part({ Name = "Sign", Size = Vector3.new(14, 4, 1), CFrame = at(plot, 0, 3, -25.5),
 		Color = plot.team.colour, Parent = model })
-	Scenery.garage(model, plot.cf, plot.team)
+	Scenery.garage(model, plot.cf)
+	plot.garage = Instance.new("Folder")
+	plot.garage.Name = "Garage"
+	plot.garage.Parent = model
+	refreshGarage(plot, nil)
 	plot.signLabel = label(sign, "Free garage", 3)
 	plot.conveyor = part({ Name = "Conveyor", Size = Vector3.new(48, 1, 6), CFrame = at(plot, 0, 1, 0),
 		Color = Color3.fromRGB(30, 30, 30), Material = Enum.Material.DiamondPlate, Parent = model })
@@ -956,6 +1015,7 @@ Players.PlayerRemoving:Connect(function(player)
 		st.plot.pendingLabel.Text = "Collect $0"
 		st.plot.items:ClearAllChildren()
 		st.plot.drops:ClearAllChildren()
+		refreshGarage(st.plot, nil) -- back to a building site for the next team
 		for _, pad in st.plot.pads do
 			pad.Transparency = 1
 			pad.CanTouch = false
