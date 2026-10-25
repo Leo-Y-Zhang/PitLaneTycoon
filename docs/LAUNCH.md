@@ -77,6 +77,13 @@ before applying.
   rewards don't count, so it can't be bought). The game's owner is never shown on it.
 - **Happy hour:** 2x earnings every Saturday and Sunday at 18:00 UTC (19:00 UK summer time,
   18:00 in winter), so players gather at the same time. Mention it in the description.
+- **Time trial (25 Oct 2026):** a 1,165-stud track round the paddock. The Race button (or Drive
+  at the show car) puts the player in their team's car on the grid; WASD or arrows, a gamepad
+  or a phone's thumbstick drive it, jump gets out. The server times every lap itself (track
+  limits and teleports void a lap), so the Fastest laps board can't be faked. A clean lap pays
+  15 seconds of income, a new best lap 2 minutes more, and the car is 5 studs/s faster each
+  season (65 up to 95), so every season's car has a lap record to beat. Put "drive your own F1
+  car" in the description and a car on the track in a thumbnail.
 
 ## Saving across servers
 

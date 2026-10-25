@@ -495,7 +495,11 @@ local function run()
 	check("the show car offers a drive", showCar and showCar:FindFirstChildWhichIsA("ProximityPrompt", true))
 	check("a fastest-laps board stands at the spawn", workspace:FindFirstChild("LapBoard"))
 	local shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
-	local TrackShape = require(shared:WaitForChild("TrackShape")) :: any
+	local trackModule = shared:FindFirstChild("TrackShape")
+	if not (trackModule and track) then
+		return -- a build without the time trial: the checks above have failed it
+	end
+	local TrackShape = require(trackModule) :: any
 	local trackShape = (require(shared:WaitForChild("Config")) :: any).Track
 	local cashBeforeLap = cash.Value
 	workspace:SetAttribute("PLT_Drive", true)
