@@ -878,6 +878,9 @@ end
 task.spawn(function()
 	while true do
 		refreshGift()
+		-- the next pad can reach this computer after the attribute that names it, with
+		-- nothing changing afterwards to redraw the guide line
+		refreshGuide()
 		task.wait(1)
 	end
 end)
