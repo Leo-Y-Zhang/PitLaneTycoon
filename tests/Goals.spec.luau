@@ -44,10 +44,15 @@ do
 	-- within a season's line, lap goals within reach of that season's car
 	local length = TrackShape.length(Config.Track)
 	local season, reachable, why = 0, true, nil
-	local lastEarned, lastSeason = 0, 0
+	local lastEarned, lastSeason, mostBought = 0, 0, 0
 	for _, goal in Config.Goals do
+		if goal.kind == "purchases" then
+			mostBought = math.max(mostBought, goal.n)
+		end
 		if goal.kind == "purchases" and goal.n > seasonOnePurchases then
 			reachable, why = false, goal.text
+		elseif goal.kind == "crew" and mostBought < Config.Crew.unlockPurchases and lastSeason == 0 then
+			reachable, why = false, goal.text .. " comes before the crew unlocks"
 		elseif goal.kind == "lapUnder" then
 			local top = math.min(Config.Drive.maxTopSpeed, Config.Drive.topSpeed + Config.Drive.perSeason * season)
 			if goal.n < length / top * 1.1 then -- a flat-out lap plus some room for the bends
@@ -66,7 +71,7 @@ do
 end
 
 do
-	local s = { banks = 0, purchases = 3, laps = 0, earned = 0, bestLap = 0, season = 0, trophy = false }
+	local s = { banks = 0, purchases = 3, laps = 0, earned = 0, bestLap = 0, season = 0, trophy = false, crew = 0 }
 	local function goal(kind: string, n: number)
 		return { kind = kind, n = n, text = "", minutes = 1, floor = 1 }
 	end
@@ -80,6 +85,9 @@ do
 	check("the trophy goal is met once bought", not Goals.done(goal("trophy", 1), s))
 	s.season = 1
 	check("and stays met in later seasons, when the trophy is gone", Goals.done(goal("trophy", 1), s))
+	check("a crew goal waits for a hire", not Goals.done(goal("crew", 1), s))
+	s.crew = 2
+	check("and counts every member hired", Goals.done(goal("crew", 1), s) and (Goals.progress(goal("crew", 3), s)) == 2)
 end
 
 do
