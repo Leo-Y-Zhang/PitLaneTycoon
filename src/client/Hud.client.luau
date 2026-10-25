@@ -484,12 +484,14 @@ giftButton.Size = UDim2.new(1, -24, 0, 48)
 giftButton.TextSize = 16
 -- a little gift box before the words
 new("UIPadding", { PaddingLeft = UDim.new(0, 24) }, giftButton)
-new("Frame", { Position = UDim2.new(0, -8, 0.5, -7), Size = UDim2.fromOffset(16, 14), BorderSizePixel = 0,
-	BackgroundColor3 = Color3.fromRGB(225, 38, 28) }, giftButton)
-new("Frame", { Position = UDim2.new(0, -2, 0.5, -7), Size = UDim2.fromOffset(4, 14), BorderSizePixel = 0,
-	BackgroundColor3 = Color3.fromRGB(255, 205, 60) }, giftButton)
-new("Frame", { Position = UDim2.new(0, -10, 0.5, -10), Size = UDim2.fromOffset(20, 4), BorderSizePixel = 0,
-	BackgroundColor3 = Color3.fromRGB(255, 205, 60) }, giftButton)
+for _, piece in { -- lid, box, ribbon, two bow loops
+	{ -10, -7, 20, 5, Color3.fromRGB(225, 38, 28) }, { -8, -2, 16, 11, Color3.fromRGB(225, 38, 28) },
+	{ -2, -7, 4, 16, Color3.fromRGB(255, 205, 60) }, { -7, -11, 5, 4, Color3.fromRGB(255, 205, 60) },
+	{ 2, -11, 5, 4, Color3.fromRGB(255, 205, 60) },
+} do
+	new("Frame", { Position = UDim2.new(0, piece[1], 0.5, piece[2]), Size = UDim2.fromOffset(piece[3], piece[4]),
+		BorderSizePixel = 0, BackgroundColor3 = piece[5] }, giftButton)
+end
 giftButton.Activated:Connect(function()
 	remotes:WaitForChild("ClaimGift"):FireServer()
 end)

@@ -5,7 +5,9 @@
 local Layout = {}
 
 Layout.TopBarWidth = 360
-Layout.PlayerListWidth = 260 -- Roblox's player list, top right on a computer (name, Cash, Seasons)
+-- Roblox's player list, top right on a computer: about 315 px with Seasons and Cash
+-- (measured in Studio on 25 Oct 2026)
+Layout.PlayerListWidth = 330
 Layout.SettingsWidth = 56 -- the settings button, top left
 Layout.ButtonBarHeight = 152 -- Shop, Race and New season, left edge
 Layout.ButtonBarCentre = 0.42 -- of the screen's height

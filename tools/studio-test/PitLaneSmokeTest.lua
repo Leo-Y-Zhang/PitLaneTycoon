@@ -363,7 +363,7 @@ if RunService:IsClient() then
 		local topBar = hud:FindFirstChild("TopBar") :: Frame?
 		local phone = game:GetService("UserInputService").TouchEnabled and not game:GetService("UserInputService").KeyboardEnabled
 		clientCheck("the top bar stays clear of the player list", topBar and (phone
-			or topBar.AbsolutePosition.X + topBar.AbsoluteSize.X <= view.X - 250),
+			or topBar.AbsolutePosition.X + topBar.AbsoluteSize.X <= view.X - 320), -- the list is about 315 px wide
 			topBar and ("right edge %d of %d"):format(topBar.AbsolutePosition.X + topBar.AbsoluteSize.X, view.X))
 
 		for _, delay in { 4, 10, 15 } do -- the server half finishes in about a minute
