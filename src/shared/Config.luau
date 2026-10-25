@@ -82,6 +82,19 @@ Config.GaragePieces = {
 	{ name = "UpperDeck", label = "Upper deck", at = 16 },
 } :: { GaragePiece }
 
+-- Sounds and music, from Roblox-licensed libraries only (APM Music, Pro Sound Effects), so
+-- any experience may play them. `python tools/studio-test/run.py PLACE --audio` checks every
+-- id here belongs to one of those libraries, and lists more to choose from.
+Config.Audio = {
+	click = 9119717523, -- Pro Sound Effects: Switch Click On Or Off Toggle Button 2
+	cash = 9113728625, -- Pro Sound Effects: Cash Register 1
+	buy = 9113728756, -- Pro Sound Effects: Cash Register 5
+	build = 9120716440, -- Pro Sound Effects: Whoosh Fast Swish By 4
+	-- APM Music: Windows Down (Kosinus), Racing Mind (Thomas Balmforth), Big League (c)
+	-- (Sacha Collisson), Rock Driver (Richard Myhill)
+	music = { 9044706933, 1836950435, 1837768143, 1840321341 },
+}
+
 Config.BaseConveyorSpeed = 9
 Config.PartLifetime = 25 -- seconds before an uncollected part is cleared
 
