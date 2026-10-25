@@ -77,6 +77,13 @@ before applying.
   rewards don't count, so it can't be bought). The game's owner is never shown on it.
 - **Happy hour:** 2x earnings every Saturday and Sunday at 18:00 UTC (19:00 UK summer time,
   18:00 in winter), so players gather at the same time. Mention it in the description.
+- **The garage builds itself (25 Oct 2026):** a free plot is a building site (cones,
+  scaffolding, orange fencing, an under-construction sign). Purchases 1, 2, 4, 6, 8, 10, 12, 14
+  and 16 each raise a piece: epoxy floor, back wall, side walls, team livery, awning,
+  floodlights, pit wall, tyres and tools, upper deck. The whole garage is up before the trophy;
+  a new season opens in the finished shell and builds the extras again. Visible progress is
+  what makes a tycoon satisfying, and a full garage is what other players see when they walk
+  past.
 - **Time trial (25 Oct 2026):** a 1,165-stud track round the paddock. The Race button (or Drive
   at the show car) puts the player in their team's car on the grid; WASD or arrows, a gamepad
   or a phone's thumbstick drive it, jump gets out. The server times every lap itself (track

@@ -16,6 +16,9 @@ sound loads and that banking shows a +$ pop-up. It prints PASS or FAIL for each 
 errors the game logged, then removes the plugin. It never publishes anything. The latest place
 file is a CI artifact (`PitLaneTycoon-place`) on every run.
 
+The garage: a free plot is a building site and so is a new team's; the first purchase lays
+the floor and clears the cones, the second raises the back wall and takes the scaffolding down.
+
 Then the time trial: the track, the show car's Drive prompt and the Fastest laps board are
 there; Race seats the player in their own car, which their computer drives; holding the brake
 reverses it (the driving script and the car's motors work); the test then laps the car along
@@ -40,6 +43,9 @@ brakes, reverses, slows on grass and steers the right way, and that lap timing i
 (also with uneven samples), voids cut and teleported laps and does not count reversing over the
 line. Five deliberate bugs (no teleport check, laps counted backwards, no nearest-point search,
 steering reversed, a track through the garages) each failed it on 25 Oct 2026.
+`luau tests/Garage.spec.luau` checks the garage plan: a free plot is all building site, the
+pieces go up in order and all before the trophy, each site prop is cleared by one piece, and
+a new season keeps the shell.
 
 ## By hand
 
