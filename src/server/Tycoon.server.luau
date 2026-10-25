@@ -69,6 +69,9 @@ redeem.Parent = remotes
 local openCrate = Instance.new("RemoteFunction") -- hire from a crew crate: the member's key back, or nil and why
 openCrate.Name = "OpenCrate"
 openCrate.Parent = remotes
+local hirePick = Instance.new("RemoteFunction") -- hire Scout's pick: the member's key back, or nil and why
+hirePick.Name = "HirePick"
+hirePick.Parent = remotes
 local effect = remote("Effect") -- purchase sparks and "+$" pop-ups, drawn by the owner's HUD
 
 local ITEM_BY_KEY = {}
@@ -153,6 +156,7 @@ type Data = {
 	rares: { [string]: number }, -- rare parts collected, all seasons (the garage's case shows them)
 	likes: number, likedOn: { [string]: number }, -- likes this garage has had; whose garages this player liked today
 	crew: { [string]: number }, -- crew members hired, by key (all seasons)
+	pickWindow: number, -- the Scout's pick period the team last hired from
 }
 type State = {
 	data: Data, plot: any?, pending: number, canSave: boolean, passes: { [string]: boolean }, dirty: boolean, friends: number,
@@ -168,7 +172,7 @@ local function freshData(): Data
 		cash = 0, bought = {}, season = 0, lastDaily = 0, streak = 0, receipts = {},
 		earned = 0, lastSeen = 0, offlineRate = 0, funnel = 0, bestLap = 0, laps = 0, bestLapReverse = 0,
 		goal = 1, banks = 0, codes = {}, settings = { music = true, sfx = true }, welcomed = false,
-		rares = {}, likes = 0, likedOn = {}, crew = {},
+		rares = {}, likes = 0, likedOn = {}, crew = {}, pickWindow = 0,
 	}
 end
 
@@ -293,6 +297,23 @@ end
 local function cratePrice(st: State): number
 	return Crew.price(factoryPerMinute(st) * baseMultiplier(st), baseMultiplier(st), Config.Crew.crate)
 end
+-- Scout's pick: the same member in every server for each Config.Crew.pick.minutes
+local PICK_SECONDS = Config.Crew.pick.minutes * 60
+local function pickWindow(): number
+	return math.floor(workspace:GetServerTimeNow() / PICK_SECONDS)
+end
+local function currentPick(): Crew.Member
+	local forced = RunService:IsStudio() and workspace:GetAttribute("PLT_Pick") -- Studio tests choose it
+	for _, member in Config.Crew.members do
+		if member.key == forced then
+			return member
+		end
+	end
+	return Crew.pick(pickWindow(), Config.Crew.members, Config.Crew.pick.weights)
+end
+local function pickPrice(st: State): number
+	return cratePrice(st) * Config.Crew.pick.crates[currentPick().rarity]
+end
 
 local function goalStats(st: State): Goals.Stats
 	return {
@@ -346,6 +367,8 @@ local function publish(player: Player)
 	player:SetAttribute("Likes", st.data.likes)
 	player:SetAttribute("CrewUnlocked", crewUnlocked(st))
 	player:SetAttribute("CratePrice", cratePrice(st))
+	player:SetAttribute("PickPrice", pickPrice(st))
+	player:SetAttribute("PickHired", st.data.pickWindow == pickWindow())
 	local crewIncome, crewRare = crewBoost(st)
 	player:SetAttribute("CrewIncome", math.floor((crewIncome - 1) * 100 + 0.5)) -- percent
 	player:SetAttribute("CrewRare", crewRare)
@@ -1247,7 +1270,19 @@ redeem.OnServerInvoke = function(player, text)
 	return "Code " .. code .. ": +" .. money(reward)
 end
 
--- a crew crate: pay, hire one member at random, and the best of the crew go to work
+-- a new crew member joins, and the best of the crew go to work
+local function hire(player: Player, st: State, member: Crew.Member)
+	st.data.crew[member.key] = (st.data.crew[member.key] or 0) + 1
+	st.dirty = true
+	refreshCrew(st.plot, st)
+	publish(player)
+	effect:FireClient(player, "hired", member.key)
+	if member.rarity == #Config.Crew.rarities then -- the whole server hears about a Legendary
+		notify:FireAllClients(("%s hired a LEGENDARY %s!"):format(st.plot.team.name, member.name))
+	end
+end
+
+-- a crew crate: pay and hire one member at random
 openCrate.OnServerInvoke = function(player)
 	local st = states[player]
 	if not st or not st.plot then
@@ -1264,17 +1299,50 @@ openCrate.OnServerInvoke = function(player)
 	st.lastCrate = os.clock()
 	st.data.cash -= price
 	local member = Crew.roll(rng:NextNumber(), rng:NextNumber(), Config.Crew.members, Config.Crew.rarities)
-	st.data.crew[member.key] = (st.data.crew[member.key] or 0) + 1
-	st.dirty = true
 	Analytics.spent(player, price, st.data.cash, Enum.AnalyticsEconomyTransactionType.Shop, "CrewCrate")
-	refreshCrew(st.plot, st)
-	publish(player)
-	effect:FireClient(player, "hired", member.key)
-	if member.rarity == #Config.Crew.rarities then -- the whole server hears about a Legendary
-		notify:FireAllClients(("%s hired a LEGENDARY %s!"):format(st.plot.team.name, member.name))
-	end
+	hire(player, st, member)
 	return member.key
 end
+
+-- Scout's pick: pay its fixed price for that member, once per pick
+hirePick.OnServerInvoke = function(player)
+	local st = states[player]
+	if not st or not st.plot then
+		return nil, "Try again in a moment"
+	elseif not crewUnlocked(st) then
+		return nil, ("Buy %d machines to hire a crew"):format(Config.Crew.unlockPurchases)
+	elseif os.clock() - st.lastCrate < 0.8 then
+		return nil, "One at a time"
+	elseif st.data.pickWindow == pickWindow() then
+		return nil, "You've hired this pick; the scout finds another soon"
+	end
+	local member, price = currentPick(), pickPrice(st)
+	if st.data.cash < price then
+		return nil, member.name .. " costs " .. money(price)
+	end
+	st.lastCrate = os.clock()
+	st.data.cash -= price
+	st.data.pickWindow = pickWindow()
+	Analytics.spent(player, price, st.data.cash, Enum.AnalyticsEconomyTransactionType.Shop, "ScoutsPick")
+	hire(player, st, member)
+	return member.key
+end
+-- the pick everyone sees, and when it changes
+task.spawn(function()
+	local shown, shownKey = nil, nil
+	while true do
+		local window, key = pickWindow(), currentPick().key
+		if window ~= shown or key ~= shownKey then
+			shown, shownKey = window, key
+			workspace:SetAttribute("PickKey", key)
+			workspace:SetAttribute("PickEnds", (window + 1) * PICK_SECONDS)
+			for player in states do
+				publish(player)
+			end
+		end
+		task.wait(1)
+	end
+end)
 -- Studio tests: PLT_Crew opens the crew at once and gives each player cash for ten crates
 if RunService:IsStudio() then
 	workspace:GetAttributeChangedSignal("PLT_Crew"):Connect(function()

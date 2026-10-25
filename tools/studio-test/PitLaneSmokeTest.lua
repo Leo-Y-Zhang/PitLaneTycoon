@@ -604,6 +604,23 @@ if RunService:IsClient() then
 		end
 		clientCheck("the Crew button sits under Shop and Race", shopButton and crewButton
 			and crewButton.AbsolutePosition.Y > shopButton.AbsolutePosition.Y + 60)
+
+		-- Scout's pick, once the server half makes it a Mechanic
+		local forced = waitFor(function()
+			return workspace:GetAttribute("PLT_Pick") == "mechanic" and workspace:GetAttribute("PickKey") == "mechanic"
+		end, 60)
+		task.wait(2) -- the server half notes the cash first
+		local strip = panel and panel:FindFirstChild("Pick")
+		clientCheck("the pick shows in the crew panel with its countdown", forced and strip and strip.Visible
+			and string.find(strip.Member.Text, "Mechanic", 1, true) and string.find(strip.Timer.Text, "a new one in", 1, true),
+			strip and (strip.Timer.Text .. " / " .. strip.Member.Text))
+		local hirePick = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("HirePick")
+		local picked = hirePick:InvokeServer()
+		clientCheck("the pick hires that member", picked == "mechanic", picked)
+		task.wait(0.9)
+		local again, whyAgain = hirePick:InvokeServer()
+		clientCheck("and only once per pick", again == nil and string.find(tostring(whyAgain), "hired this pick", 1, true),
+			whyAgain)
 	end)
 	return
 end
@@ -1046,6 +1063,33 @@ local function run()
 	local expected = incomeBeforeCrew * (1 + boost / 100)
 	check("the crew adds its boost to income", boost >= 15 and math.abs((player:GetAttribute("IncomePerMin") or 0) - expected) <= 2,
 		("%d -> %d at +%d%%"):format(incomeBeforeCrew, player:GetAttribute("IncomePerMin") or 0, boost))
+
+	-- Scout's pick: on offer for everyone; the test makes it a Mechanic (two crates) and the
+	-- player's side hires it, once
+	local pickKey = workspace:GetAttribute("PickKey")
+	check("Scout's pick is on offer, with its end time", type(pickKey) == "string" and pickKey ~= ""
+		and (workspace:GetAttribute("PickEnds") or 0) > workspace:GetServerTimeNow(), pickKey)
+	local function owned(key: string): number
+		local ok, crew = pcall(function()
+			return HttpService:JSONDecode(player:GetAttribute("CrewOwned") or "{}")
+		end)
+		return ok and crew[key] or 0
+	end
+	local mechanics = owned("mechanic")
+	workspace:SetAttribute("PLT_Pick", "mechanic")
+	check("the pick changes for everyone at once", waitFor(function()
+		return workspace:GetAttribute("PickKey") == "mechanic"
+	end, 4), workspace:GetAttribute("PickKey"))
+	local pickPrice = player:GetAttribute("PickPrice") or 0
+	local cashBeforePick = cash.Value
+	check("a Common pick costs two crates", pickPrice == price * 2, ("%d vs crate %d"):format(pickPrice, price))
+	check("the player's side hires the pick", waitFor(function()
+		return owned("mechanic") == mechanics + 1
+	end, 30), owned("mechanic"))
+	task.wait(1.5)
+	check("for its price, once", cash.Value == cashBeforePick - pickPrice and owned("mechanic") == mechanics + 1
+		and player:GetAttribute("PickHired") == true, ("%d -> %d"):format(cashBeforePick, cash.Value))
+	workspace:SetAttribute("PLT_Pick", nil)
 	workspace:SetAttribute("PLT_Crew", nil)
 
 	-- leave the character somewhere visible for a screenshot

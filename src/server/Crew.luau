@@ -70,6 +70,29 @@ function Crew.boost(working: { string }, members: { Member }): (number, number)
 	return income, rare
 end
 
+-- Scout's pick for rotation `window` (a count of pick periods since 1970): the same in every
+-- server, with no random generator. Multiples of the golden ratio (and of the plastic number,
+-- for the member) spread consecutive windows evenly over [0, 1).
+function Crew.pick(window: number, members: { Member }, weights: { number }): Member
+	local r1 = (window * 0.6180339887498949) % 1
+	local r2 = (window * 0.7548776662466927) % 1
+	local tier, edge = #weights, 0
+	for i, weight in weights do
+		edge += weight
+		if r1 < edge then
+			tier = i
+			break
+		end
+	end
+	local pool = {}
+	for _, member in members do
+		if member.rarity == tier then
+			table.insert(pool, member)
+		end
+	end
+	return pool[math.min(#pool, math.floor(r2 * #pool) + 1)]
+end
+
 -- a crate's price: `minutes` of income per minute (before crew boosts), at least floor * mult
 function Crew.price(perMinute: number, mult: number, crate: { minutes: number, floor: number }): number
 	return math.floor(math.max(crate.floor * mult, perMinute * crate.minutes))

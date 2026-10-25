@@ -351,7 +351,7 @@ end)
 local PURPLE = Color3.fromRGB(120, 60, 200)
 local crewPanel = new("Frame", {
 	Name = "CrewPanel", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-	Size = UDim2.fromOffset(440, 440), BackgroundColor3 = PANEL, Visible = false,
+	Size = UDim2.fromOffset(440, 500), BackgroundColor3 = PANEL, Visible = false,
 }, gui)
 round(crewPanel, 14)
 scaled(crewPanel)
@@ -366,7 +366,7 @@ local crewSummary = new("TextLabel", {
 }, crewPanel)
 new("UITextSizeConstraint", { MaxTextSize = 14 }, crewSummary)
 local cards = new("ScrollingFrame", {
-	Name = "Cards", Position = UDim2.fromOffset(14, 68), Size = UDim2.new(1, -28, 1, -170), BackgroundTransparency = 1,
+	Name = "Cards", Position = UDim2.fromOffset(14, 128), Size = UDim2.new(1, -28, 1, -230), BackgroundTransparency = 1,
 	ScrollBarThickness = 6, AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new(),
 }, crewPanel)
 new("UIGridLayout", { CellSize = UDim2.fromOffset(128, 84), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, cards)
@@ -400,6 +400,51 @@ local function boostText(member): string
 		table.insert(parts, ("rare parts x%g"):format(member.rare))
 	end
 	return table.concat(parts, ", ")
+end
+local function memberOf(key: string?)
+	for _, member in Config.Crew.members do
+		if member.key == key then
+			return member
+		end
+	end
+	return nil
+end
+
+-- Scout's pick: one member at a fixed price, the same in every server, changing on a timer
+local pickStrip = new("Frame", {
+	Name = "Pick", Position = UDim2.fromOffset(14, 66), Size = UDim2.new(1, -28, 0, 54),
+	BackgroundColor3 = Color3.fromRGB(32, 36, 42),
+}, crewPanel)
+round(pickStrip, 10)
+local pickStroke = new("UIStroke", { Color = PURPLE, Thickness = 2 }, pickStrip)
+local pickTimer = new("TextLabel", {
+	Name = "Timer", Position = UDim2.fromOffset(12, 6), Size = UDim2.new(1, -150, 0, 16), BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Color3.fromRGB(255, 205, 60),
+	TextXAlignment = Enum.TextXAlignment.Left,
+}, pickStrip)
+local pickName = new("TextLabel", {
+	Name = "Member", Position = UDim2.fromOffset(12, 24), Size = UDim2.new(1, -150, 0, 22), BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBold, TextScaled = true, TextColor3 = INK, TextXAlignment = Enum.TextXAlignment.Left,
+}, pickStrip)
+new("UITextSizeConstraint", { MaxTextSize = 16 }, pickName)
+local pickButton = button("Hire", GREEN, pickStrip)
+pickButton.Name = "HirePick"
+pickButton.AnchorPoint = Vector2.new(1, 0.5)
+pickButton.Position = UDim2.new(1, -8, 0.5, 0)
+pickButton.Size = UDim2.fromOffset(128, 40)
+pickButton.TextSize = 15
+local function refreshPick()
+	local member = memberOf(workspace:GetAttribute("PickKey"))
+	pickStrip.Visible = member ~= nil
+	if not member then return end
+	local left = math.max(0, math.floor((workspace:GetAttribute("PickEnds") or 0) - workspace:GetServerTimeNow()))
+	pickTimer.Text = ("SCOUT'S PICK  ·  a new one in %d:%02d"):format(left // 60, left % 60)
+	pickName.Text = ("%s  ·  %s  ·  %s"):format(member.name, Config.Crew.rarities[member.rarity].name, boostText(member))
+	pickName.TextColor3 = rarityColour(member)
+	pickStroke.Color = rarityColour(member)
+	local hired = player:GetAttribute("PickHired") == true
+	pickButton.Text = hired and "Hired" or ("Hire  " .. money(player:GetAttribute("PickPrice") or 0))
+	pickButton.BackgroundColor3 = hired and Color3.fromRGB(60, 64, 70) or GREEN
 end
 local cardOf = {}
 for i, member in Config.Crew.members do
@@ -511,6 +556,7 @@ local function refreshCrew()
 		end
 	end
 	local income, rare = player:GetAttribute("CrewIncome") or 0, player:GetAttribute("CrewRare") or 1
+	refreshPick()
 	crewSummary.Text = ("Best %d at work in the garage: +%d%% income%s"):format(Config.Crew.slots, income,
 		rare > 1 and (", rare parts x%g"):format(rare) or "")
 end
@@ -527,6 +573,28 @@ hire.Activated:Connect(function()
 		showReveal(key) -- a quicker crate cuts this one's reveal short
 	else
 		showToast(ok and tostring(why) or "Try again in a moment")
+	end
+end)
+pickButton.Activated:Connect(function()
+	if hiring or player:GetAttribute("PickHired") == true then return end
+	hiring = true
+	local ok, key, why = pcall(function()
+		return remotes:WaitForChild("HirePick"):InvokeServer()
+	end)
+	hiring = false
+	if ok and key then
+		showReveal(key)
+	else
+		showToast(ok and tostring(why) or "Try again in a moment")
+	end
+end)
+workspace:GetAttributeChangedSignal("PickKey"):Connect(refreshPick)
+task.spawn(function()
+	while true do -- the countdown
+		if crewPanel.Visible then
+			refreshPick()
+		end
+		task.wait(1)
 	end
 end)
 crewButton.Activated:Connect(function()
