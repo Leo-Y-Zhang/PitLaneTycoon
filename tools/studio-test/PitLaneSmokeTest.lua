@@ -42,8 +42,75 @@ if not isPitLane() then
 	return
 end
 
+-- editor, run.py --audio: check every sound id the game uses comes from a Roblox-licensed
+-- library (so any experience may play it), and list candidates for new sounds -------------
+-- the accounts Roblox's licensed libraries are published under
+local LICENSED = { Roblox = true, APMOfficial = true, ProSoundEffects = true }
+local function auditAudio()
+	local MarketplaceService = game:GetService("MarketplaceService")
+	local AssetService = game:GetService("AssetService")
+	local function say(text: string)
+		print(TAG, "AUDIO " .. string.sub(text, 1, 380))
+	end
+	local okConfig, config = pcall(function()
+		return require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config")) :: any
+	end)
+	local bad = 0
+	local ids = {}
+	for name, id in (okConfig and config.Audio or {}) do
+		if type(id) == "table" then
+			for i, track in id do
+				table.insert(ids, { name .. i, track })
+			end
+		else
+			table.insert(ids, { name, id })
+		end
+	end
+	for _, entry in ids do
+		local ok, info = pcall(function()
+			return MarketplaceService:GetProductInfo(entry[2], Enum.InfoType.Asset)
+		end)
+		local licensed = ok and info.Creator and LICENSED[info.Creator.Name] == true and info.AssetTypeId == 3
+		bad += licensed and 0 or 1
+		say(("%s %s %d %s by %s"):format(licensed and "OK" or "BAD", entry[1], entry[2], ok and tostring(info.Name) or "?",
+			ok and info.Creator and tostring(info.Creator.Name) or tostring(info)))
+	end
+	if #ids == 0 then
+		bad += 1
+		say("BAD no Config.Audio")
+	end
+	for _, query in { { "Music", "racing" }, { "Music", "upbeat electronic" }, { "Music", "rock drive" },
+		{ "Music", "funk" }, { "Sound", "button click" }, { "Sound", "cash register" }, { "Sound", "coin" },
+		{ "Sound", "whoosh" }, { "Sound", "race car engine" }, { "Sound", "success" }, { "Sound", "construction" } } do
+		local ok, result = pcall(function()
+			local params = Instance.new("AudioSearchParams")
+			params.SearchKeyword = query[2]
+			params.AudioSubType = query[1] == "Music" and Enum.AudioSubType.Music or Enum.AudioSubType.SoundEffect
+			return AssetService:SearchAudio(params):GetCurrentPage()
+		end)
+		if not ok then
+			say("SEARCH-FAILED " .. query[2] .. " " .. tostring(result))
+			continue
+		end
+		for i, item in result do
+			if i == 1 then
+				say("KEYS " .. query[2] .. " " .. HttpService:JSONEncode(item))
+			end
+			local creator = item.Creator or item.creator or {}
+			local name = creator.Name or creator.name or item.CreatorName or "?"
+			say(("FOUND %s | %s | %s | %s | %ss | by %s"):format(query[2], tostring(item.Id), tostring(item.Title),
+				tostring(item.Artist), tostring(item.Duration), tostring(name)))
+		end
+	end
+	print(TAG, "RESULT " .. HttpService:JSONEncode({ ok = true, result = { passed = bad == 0 and 1 or 0, total = 1, errors = bad } }))
+end
+
 -- editor: start the play test and print what it returns --------------------------------
 if RunService:IsEdit() then
+	if SCENARIO == "audio" then
+		task.delay(6, auditAudio)
+		return
+	end
 	task.delay(8, function()
 		print(TAG, "START")
 		if SCENARIO == "photo" then
@@ -204,10 +271,56 @@ if RunService:IsClient() then
 			end
 			return false
 		end, 4))
-		local tick = game:GetService("SoundService"):FindFirstChild("PitLaneTick")
-		clientCheck("the purchase sound loads", tick and waitFor(function()
-			return (tick :: Sound).IsLoaded
-		end, 8))
+		-- sound: every effect and track loads, the music plays, and the setting turns it off
+		local SoundService = game:GetService("SoundService")
+		local sounds = {}
+		for _, d in SoundService:GetChildren() do
+			if d:IsA("Sound") and string.sub(d.Name, 1, 8) == "PitLane_" then
+				table.insert(sounds, d)
+			end
+		end
+		local unloaded = waitFor(function()
+			for _, sound in sounds do
+				if not sound.IsLoaded then
+					return nil
+				end
+			end
+			return "none"
+		end, 20)
+		local missing = {}
+		for _, sound in sounds do
+			if not sound.IsLoaded then
+				table.insert(missing, sound.Name)
+			end
+		end
+		clientCheck("every sound and music track loads", #sounds >= 8 and unloaded,
+			("%d sounds%s"):format(#sounds, #missing > 0 and (", not loaded: " .. table.concat(missing, " ")) or ""))
+		local function playing(): string?
+			for _, sound in sounds do
+				if string.find(sound.Name, "Music") and sound.IsPlaying then
+					return sound.Name
+				end
+			end
+			return nil
+		end
+		clientCheck("music plays", waitFor(playing, 8), playing())
+		local settingsRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Settings")
+		settingsRemote:FireServer("music", false)
+		clientCheck("the music setting turns it off", waitFor(function()
+			return player:GetAttribute("MusicOn") == false and not playing()
+		end, 5))
+		settingsRemote:FireServer("music", true)
+		clientCheck("and on again", waitFor(playing, 5))
+		local settingsGui = player.PlayerGui:FindFirstChild("PitLaneSettings")
+		clientCheck("a settings button sits top left",
+			settingsGui and settingsGui:FindFirstChild("SettingsButton") and settingsGui.SettingsButton.AbsolutePosition.X < 80)
+		local felt = shop and shop:FindFirstChild("Feel")
+		clientCheck("buttons respond to the pointer", felt ~= nil)
+		local topBar = hud:FindFirstChild("TopBar") :: Frame?
+		local phone = game:GetService("UserInputService").TouchEnabled and not game:GetService("UserInputService").KeyboardEnabled
+		clientCheck("the top bar stays clear of the player list", topBar and (phone
+			or topBar.AbsolutePosition.X + topBar.AbsoluteSize.X <= view.X - 250),
+			topBar and ("right edge %d of %d"):format(topBar.AbsolutePosition.X + topBar.AbsoluteSize.X, view.X))
 
 		for _, delay in { 4, 10, 15 } do -- the server half finishes in about a minute
 			task.wait(delay)

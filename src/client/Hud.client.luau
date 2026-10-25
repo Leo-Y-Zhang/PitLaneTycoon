@@ -6,10 +6,12 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local MarketplaceService = game:GetService("MarketplaceService")
 local TweenService = game:GetService("TweenService")
-local SoundService = game:GetService("SoundService")
 local Debris = game:GetService("Debris")
 
+local UserInputService = game:GetService("UserInputService")
+
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Layout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Layout"))
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
 local player = Players.LocalPlayer
 
@@ -62,21 +64,31 @@ local scales: { UIScale } = {}
 local function scaled(o: GuiObject)
 	table.insert(scales, new("UIScale", {}, o))
 end
+local topScale: UIScale? = nil
+local topFrame: Frame? = nil
 local function rescale()
 	local view = workspace.CurrentCamera.ViewportSize
-	local s = math.clamp(math.min(view.X / 900, view.Y / 560), 0.65, 1)
+	local s = Layout.scale(view.X, view.Y)
 	for _, u in scales do
 		u.Scale = s
+	end
+	-- the top bar keeps clear of the player list a computer shows top right (Layout)
+	if topScale and topFrame then
+		local phone = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+		local centre, barScale = Layout.topBar(view.X, view.Y, phone)
+		topFrame.Position = UDim2.fromOffset(centre, 10)
+		topScale.Scale = barScale
 	end
 end
 
 -- top bar: cash, income, waiting at the pad, and the next purchase -------------------
 local top = new("Frame", {
-	AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 10), Size = UDim2.fromOffset(360, 92),
+	Name = "TopBar", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 10), Size = UDim2.fromOffset(360, 92),
 	BackgroundColor3 = PANEL, BackgroundTransparency = 0.1,
 }, gui)
 round(top, 12)
-scaled(top)
+topFrame = top
+topScale = new("UIScale", {}, top)
 new("UIStroke", { Color = RED, Thickness = 2 }, top)
 local cashLabel = new("TextLabel", {
 	Size = UDim2.new(1, -20, 0, 34), Position = UDim2.fromOffset(10, 4), BackgroundTransparency = 1,
@@ -171,6 +183,16 @@ new("UIListLayout", { FillDirection = Enum.FillDirection.Vertical, Padding = UDi
 scaled(bar)
 local shopButton = button("Shop", RED, bar)
 local raceButton = button("Race", Color3.fromRGB(28, 86, 214), bar)
+-- a chequered flag before the word
+new("UIPadding", { PaddingLeft = UDim.new(0, 22) }, raceButton)
+for col = 0, 2 do
+	for row = 0, 1 do
+		new("Frame", {
+			Position = UDim2.new(0, -6 + col * 6, 0.5, -6 + row * 6), Size = UDim2.fromOffset(6, 6), BorderSizePixel = 0,
+			BackgroundColor3 = (col + row) % 2 == 0 and INK or Color3.fromRGB(17, 20, 24),
+		}, raceButton)
+	end
+end
 local seasonButton = button("New season", Color3.fromRGB(200, 150, 20), bar)
 seasonButton.Visible = false
 -- the time trial: into your car on the grid, or back out to the garage
@@ -310,8 +332,7 @@ cancel.Activated:Connect(function()
 	confirm.Visible = false
 end)
 
--- where to go next: a guide line, sparks and "+$" -------------------------------------
-local tick = new("Sound", { Name = "PitLaneTick", SoundId = "rbxasset://sounds/volume_slider.ogg", Volume = 0.5 }, SoundService)
+-- where to go next: a guide line, sparks and "+$" (Polish.client.luau plays the sounds) --
 local guide = new("Beam", {
 	Name = "PitLaneGuide", Enabled = false, FaceCamera = true, Segments = 1, Width0 = 0.3, Width1 = 0.3,
 	LightEmission = 1, Color = ColorSequence.new(Color3.fromRGB(255, 205, 60)), Transparency = NumberSequence.new(0.35),
@@ -386,22 +407,18 @@ remotes:WaitForChild("Effect").OnClientEvent:Connect(function(kind: string, arg:
 	local plot = myPlot()
 	if kind == "banked" then
 		popUp("+" .. money(arg))
-		tick.PlaybackSpeed = 1
-		tick:Play()
 	elseif kind == "bought" and plot then
 		local items = plot:FindFirstChild("Items")
 		local spot = items and items:FindFirstChild(arg) or plot:FindFirstChild("Buy_" .. arg)
 		if spot and spot:IsA("BasePart") then
 			sparks(spot)
 		end
-		tick.PlaybackSpeed = 1.5
-		tick:Play()
 	end
 end)
 
 -- the current goal and the gift for staying, right edge (clear of the jump button) -----
 local goals = new("Frame", {
-	AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.42, 0), Size = UDim2.fromOffset(230, 150),
+	Name = "GoalPanel", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.52, 0), Size = UDim2.fromOffset(230, 150),
 	BackgroundColor3 = PANEL, BackgroundTransparency = 0.15,
 }, gui)
 round(goals, 12)
@@ -434,6 +451,14 @@ local giftButton = button("Gift", Color3.fromRGB(60, 64, 70), goals)
 giftButton.Position = UDim2.fromOffset(12, 88)
 giftButton.Size = UDim2.new(1, -24, 0, 48)
 giftButton.TextSize = 16
+-- a little gift box before the words
+new("UIPadding", { PaddingLeft = UDim.new(0, 24) }, giftButton)
+new("Frame", { Position = UDim2.new(0, -8, 0.5, -7), Size = UDim2.fromOffset(16, 14), BorderSizePixel = 0,
+	BackgroundColor3 = Color3.fromRGB(225, 38, 28) }, giftButton)
+new("Frame", { Position = UDim2.new(0, -2, 0.5, -7), Size = UDim2.fromOffset(4, 14), BorderSizePixel = 0,
+	BackgroundColor3 = Color3.fromRGB(255, 205, 60) }, giftButton)
+new("Frame", { Position = UDim2.new(0, -10, 0.5, -10), Size = UDim2.fromOffset(20, 4), BorderSizePixel = 0,
+	BackgroundColor3 = Color3.fromRGB(255, 205, 60) }, giftButton)
 giftButton.Activated:Connect(function()
 	remotes:WaitForChild("ClaimGift"):FireServer()
 end)

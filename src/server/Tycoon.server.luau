@@ -57,6 +57,7 @@ end
 local notify = remote("Notify")
 local newSeason = remote("NewSeason")
 local claimGift = remote("ClaimGift")
+local settings = remote("Settings") -- ("music" | "sfx", on)
 local redeem = Instance.new("RemoteFunction") -- a code in, a message back
 redeem.Name = "Redeem"
 redeem.Parent = remotes
@@ -138,6 +139,7 @@ type Data = {
 	funnel: number, -- the furthest onboarding-funnel step logged (Analytics)
 	bestLap: number, laps: number, -- time trial: best lap in seconds (0 = none yet), clean laps
 	goal: number, banks: number, codes: { [string]: boolean }, -- the next goal (Config.Goals), times banked, codes used
+	settings: { music: boolean, sfx: boolean },
 }
 type State = {
 	data: Data, plot: any?, pending: number, canSave: boolean, passes: { [string]: boolean }, dirty: boolean, friends: number,
@@ -151,7 +153,7 @@ local function freshData(): Data
 	return {
 		cash = 0, bought = {}, season = 0, lastDaily = 0, streak = 0, receipts = {},
 		earned = 0, lastSeen = 0, offlineRate = 0, funnel = 0, bestLap = 0, laps = 0,
-		goal = 1, banks = 0, codes = {},
+		goal = 1, banks = 0, codes = {}, settings = { music = true, sfx = true },
 	}
 end
 
@@ -287,6 +289,8 @@ local function publish(player: Player)
 		player:SetAttribute("GoalReward", math.floor(rewardOf(st, goal.minutes, goal.floor)))
 	end
 	player:SetAttribute("GiftAt", st.giftAt)
+	player:SetAttribute("MusicOn", st.data.settings.music ~= false)
+	player:SetAttribute("SfxOn", st.data.settings.sfx ~= false)
 	for name in Config.Passes do
 		player:SetAttribute("Owns" .. name, st.passes[name] == true)
 	end
@@ -445,6 +449,9 @@ local function refreshGarage(plot, st: State?, animate: boolean?)
 			local model = Scenery.garagePiece(piece.name, plot.garage, plot.cf, plot.team)
 			if animate then
 				rise(model)
+				if plot.owner then
+					effect:FireClient(plot.owner, "built", piece.name)
+				end
 			end
 		elseif have and not up[piece.name] then
 			have:Destroy()
@@ -956,6 +963,16 @@ local function lapDone(player: Player, seconds: number)
 	Analytics.earned(player, reward, st.data.cash, Enum.AnalyticsEconomyTransactionType.Gameplay, "Lap")
 	checkGoals(player)
 end
+
+-- music and sounds on or off, kept with the save
+settings.OnServerEvent:Connect(function(player, which, on)
+	local st = states[player]
+	if st and (which == "music" or which == "sfx") and type(on) == "boolean" then
+		st.data.settings[which] = on
+		st.dirty = true
+		publish(player)
+	end
+end)
 
 -- the gift for staying, and redeem codes ---------------------------------------------
 claimGift.OnServerEvent:Connect(function(player)

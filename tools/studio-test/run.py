@@ -76,6 +76,8 @@ def main() -> int:
     ap.add_argument("--shots", type=Path, help="save a screenshot of the Studio window here (it shows your avatar)")
     ap.add_argument("--timeout", type=int, default=420)
     ap.add_argument("--keep-open", action="store_true", help="leave the Studio window open afterwards")
+    ap.add_argument("--audio", action="store_true",
+                    help="check every sound id in Config.Audio was made by Roblox, and list Roblox-made candidates")
     ap.add_argument("--photos", action="store_true",
                     help="take thumbnail shots of a finished garage instead of testing (needs --shots)")
     a = ap.parse_args()
@@ -89,6 +91,8 @@ def main() -> int:
         if not a.shots:
             sys.exit("--photos needs --shots DIR")
         source = source.replace('local SCENARIO = "smoke"', 'local SCENARIO = "photo"', 1)
+    elif a.audio:
+        source = source.replace('local SCENARIO = "smoke"', 'local SCENARIO = "audio"', 1)
     PLUGIN.write_text(source, encoding="utf-8")
     locked = screen_locked()
     if locked:
