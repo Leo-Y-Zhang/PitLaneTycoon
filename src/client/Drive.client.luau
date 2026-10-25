@@ -167,8 +167,10 @@ RunService.Heartbeat:Connect(function(dt)
 	local offroad = math.abs(offset) > Config.Track.halfWidth + 1
 	local along = flat:Dot(forward)
 	local top = car:GetAttribute("TopSpeed") or Config.Drive.topSpeed
-	-- held on the grid until the lights go out
-	local throttle = go and (seat :: VehicleSeat).ThrottleFloat or 0
+	-- held on the grid until the lights go out. In Studio a test holds a pedal with the
+	-- seat's TestThrottle attribute: Roblox's own controls rewrite ThrottleFloat every frame
+	local pedal = RunService:IsStudio() and seat:GetAttribute("TestThrottle") or (seat :: VehicleSeat).ThrottleFloat
+	local throttle = go and pedal or 0
 	local speed, turn = DriveModel.step(along, throttle, (seat :: VehicleSeat).SteerFloat, dt, top, offroad, Config.Drive)
 	-- grip: sideways motion dies away a little behind the steering, so the car slides a
 	-- touch through fast bends instead of running on rails

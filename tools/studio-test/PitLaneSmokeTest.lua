@@ -503,14 +503,36 @@ if RunService:IsClient() then
 		-- hold the brake (it reverses) for three seconds, after the controls have written theirs
 		local speedLabel = frame and frame:FindFirstChild("Speed") :: TextLabel?
 		local fastest = 0 -- the highest reading while reversing
+		local chassis = car.PrimaryPart :: BasePart
+		local driveForce = chassis:FindFirstChild("Drive") :: LinearVelocity?
+		local trace = {} -- DIAG: what the car did, every half second
+		local nextTrace = 0
+		local flips = 0 -- DIAG: how often something else rewrites the throttle
+		local flipWatch = seat:GetPropertyChangedSignal("ThrottleFloat"):Connect(function()
+			flips += 1
+		end)
+		seat:SetAttribute("TestThrottle", -1)
 		local hold = RunService.Stepped:Connect(function()
 			seat.ThrottleFloat = -1
 			local reading = speedLabel and tonumber(string.match(speedLabel.Text, "^(%d+) km/h$"))
 			fastest = math.max(fastest, reading or 0)
 		end)
+		local watch = RunService.Heartbeat:Connect(function()
+			if os.clock() < nextTrace then return end
+			nextTrace = os.clock() + 0.5
+			local v = chassis.AssemblyLinearVelocity
+			local pv = driveForce and driveForce.PlaneVelocity or Vector2.zero
+			table.insert(trace, ("thr=%.1f v=%.2f pv=%.2f drive=%s clock=%s txt=%s seat=%s"):format(seat.ThrottleFloat,
+				v.Magnitude, pv.Magnitude, tostring(driveForce ~= nil and chassis:FindFirstChild("Steer") ~= nil),
+				clockLabel and clockLabel.Text or "?", speedLabel and speedLabel.Text or "?",
+				tostring(humanoid.SeatPart == seat and seat:GetAttribute("RaceCar"))))
+		end)
 		task.wait(3)
 		hold:Disconnect()
-		clientCheck("the speed shows in km/h", fastest > 10, ("up to %d km/h"):format(fastest))
+		watch:Disconnect()
+		flipWatch:Disconnect()
+		seat:SetAttribute("TestThrottle", nil)
+		clientCheck("the speed shows in km/h", fastest > 10, ("up to %d km/h | flips %d | %s"):format(fastest, flips, table.concat(trace, " ; ")))
 
 		local function place(a: number, off: number)
 			local x, z = TrackShape.point(Config.Track, a)
