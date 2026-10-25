@@ -207,10 +207,12 @@ local bar = new("Frame", {
 	AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.42, 0), Size = UDim2.fromOffset(150, Layout.ButtonBarHeight),
 	BackgroundTransparency = 1,
 }, gui)
-new("UIListLayout", { FillDirection = Enum.FillDirection.Vertical, Padding = UDim.new(0, 10) }, bar)
+new("UIListLayout", { FillDirection = Enum.FillDirection.Vertical, Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, bar)
 scaled(bar)
 local shopButton = button("Shop", RED, bar)
+shopButton.LayoutOrder = 1
 local raceButton = button("Race", Color3.fromRGB(28, 86, 214), bar)
+raceButton.LayoutOrder = 2
 -- a chequered flag before the word
 new("UIPadding", { PaddingLeft = UDim.new(0, 22) }, raceButton)
 for col = 0, 2 do
@@ -223,8 +225,10 @@ for col = 0, 2 do
 end
 local crewButton = button("Crew", Color3.fromRGB(120, 60, 200), bar)
 crewButton.Name = "CrewButton"
+crewButton.LayoutOrder = 3
 crewButton.Visible = false -- until the crew unlocks
 local seasonButton = button("New season", Color3.fromRGB(200, 150, 20), bar)
+seasonButton.LayoutOrder = 4
 seasonButton.Visible = false
 -- the time trial: into your car on the grid, or back out to the garage. Once the Reverse GP
 -- is open, Race asks which way round first.
@@ -358,13 +362,14 @@ new("TextLabel", {
 }, crewPanel)
 local crewSummary = new("TextLabel", {
 	Name = "Summary", Position = UDim2.fromOffset(14, 40), Size = UDim2.new(1, -28, 0, 20), BackgroundTransparency = 1,
-	Font = Enum.Font.GothamMedium, TextSize = 14, TextColor3 = Color3.fromRGB(200, 204, 212), TextWrapped = true,
+	Font = Enum.Font.GothamMedium, TextScaled = true, TextColor3 = Color3.fromRGB(200, 204, 212),
 }, crewPanel)
+new("UITextSizeConstraint", { MaxTextSize = 14 }, crewSummary)
 local cards = new("ScrollingFrame", {
 	Name = "Cards", Position = UDim2.fromOffset(14, 68), Size = UDim2.new(1, -28, 1, -170), BackgroundTransparency = 1,
 	ScrollBarThickness = 6, AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new(),
 }, crewPanel)
-new("UIGridLayout", { CellSize = UDim2.fromOffset(128, 84), CellPadding = UDim2.fromOffset(8, 8) }, cards)
+new("UIGridLayout", { CellSize = UDim2.fromOffset(128, 84), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, cards)
 local oddsParts = {}
 for _, r in Config.Crew.rarities do
 	table.insert(oddsParts, ("%s %g%%"):format(r.name, r.chance * 100))
@@ -411,11 +416,12 @@ for i, member in Config.Crew.members do
 		TextSize = 12, TextColor3 = rarityColour(member), TextXAlignment = Enum.TextXAlignment.Left,
 		Text = Config.Crew.rarities[member.rarity].name,
 	}, card)
-	new("TextLabel", {
-		Position = UDim2.fromOffset(8, 46), Size = UDim2.new(1, -16, 0, 16), BackgroundTransparency = 1, Font = Enum.Font.Gotham,
-		TextSize = 12, TextColor3 = Color3.fromRGB(200, 204, 212), TextXAlignment = Enum.TextXAlignment.Left,
-		TextWrapped = true, Text = boostText(member),
+	local boost = new("TextLabel", {
+		Position = UDim2.fromOffset(8, 46), Size = UDim2.new(1, -16, 0, 14), BackgroundTransparency = 1, Font = Enum.Font.Gotham,
+		TextScaled = true, TextColor3 = Color3.fromRGB(200, 204, 212), TextXAlignment = Enum.TextXAlignment.Left,
+		Text = boostText(member),
 	}, card)
+	new("UITextSizeConstraint", { MaxTextSize = 12 }, boost) -- a two-part boost shrinks to fit
 	local count = new("TextLabel", {
 		Name = "Count", Position = UDim2.fromOffset(8, 62), Size = UDim2.new(1, -16, 0, 16), BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = GREEN, TextXAlignment = Enum.TextXAlignment.Left,
@@ -505,7 +511,7 @@ local function refreshCrew()
 		end
 	end
 	local income, rare = player:GetAttribute("CrewIncome") or 0, player:GetAttribute("CrewRare") or 1
-	crewSummary.Text = ("Your best %d work in the garage: +%d%% income%s"):format(Config.Crew.slots, income,
+	crewSummary.Text = ("Best %d at work in the garage: +%d%% income%s"):format(Config.Crew.slots, income,
 		rare > 1 and (", rare parts x%g"):format(rare) or "")
 end
 
