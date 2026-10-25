@@ -99,6 +99,17 @@ do
 	check("reversing steers the other way", backRight > 0, backRight)
 end
 
+do -- the start lights
+	local lit0, go0 = DriveModel.lights(0, 0.5)
+	local lit3 = DriveModel.lights(DriveModel.LightGap * 3 + 0.01, 0.5)
+	local lit5, go5 = DriveModel.lights(DriveModel.LightGap * 5 + 0.2, 0.5)
+	local out, go = DriveModel.lights(DriveModel.LightGap * 5 + 0.51, 0.5)
+	check("the lights start dark and the car is held", lit0 == 0 and not go0)
+	check("they come on one at a time", lit3 == 3, lit3)
+	check("all five stay lit through the hold", lit5 == 5 and not go5, lit5)
+	check("then all go out: GO", out == 0 and go)
+end
+
 -- lap timing --------------------------------------------------------------------------
 local function timer()
 	return LapTimer.new({
