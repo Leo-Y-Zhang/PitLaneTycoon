@@ -364,7 +364,7 @@ function Scenery.crewMember(parent: Instance, cf: CFrame, suit: Color3, band: Co
 		p(1.4, 0.55, -0.3, 0.2, 0.4, 0.8, STEEL, Enum.Material.Metal)
 	elseif prop == "lollipop" then
 		p(1.4, 3.6, -0.5, 0.15, 3.4, 0.15, CARBON) -- the pole
-		local board = p(1.4, 5.9, -0.5, 0.15, 1.9, 1.9, Color3.fromRGB(225, 38, 28))
+		local board = p(1.4, 5.9, -0.5, 0.15, 1.9, 1.9, Color3.fromRGB(250, 205, 40)) -- yellow: it shows against any suit
 		board.Shape = Enum.PartType.Cylinder
 		board.CFrame = cf * CFrame.new(1.4, 5.9, -0.5) * CFrame.Angles(0, math.rad(90), 0)
 	elseif prop == "headset" then

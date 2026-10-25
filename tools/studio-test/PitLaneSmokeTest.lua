@@ -256,7 +256,7 @@ local function photoShoot()
 	end
 	if plot.Items:FindFirstChild("Crew") then -- the pit crew round the car, from the back wall
 		cam.CameraType = Enum.CameraType.Scriptable
-		cam.CFrame = CFrame.lookAt((base * CFrame.new(2, 7.5, 24)).Position, (base * CFrame.new(2, 2.5, 10)).Position)
+		cam.CFrame = CFrame.lookAt((base * CFrame.new(2, 9, 24.3)).Position, (base * CFrame.new(2, 2.5, 11.5)).Position)
 		task.wait(1.5)
 		print(TAG, "SHOT crew")
 		task.wait(2.5)
@@ -591,7 +591,19 @@ if RunService:IsClient() then
 		clientCheck("the crate odds are on show", panel and string.find(panel.Odds.Text, "Legendary 2%", 1, true), panel and panel.Odds.Text)
 		if panel then
 			panel.Visible = true -- in the screenshot
+			task.wait(0.5)
+			local c = panel.Cards
+			clientCheck("cards run commonest first, Config order", c.fitter.AbsolutePosition.X < c.mechanic.AbsolutePosition.X
+				and c.fitter.AbsolutePosition.Y < c.principal.AbsolutePosition.Y)
 		end
+		local shopButton = nil
+		for _, b in (crewButton and crewButton.Parent:GetChildren() or {}) do
+			if b:IsA("TextButton") and b.Text == "Shop" then
+				shopButton = b
+			end
+		end
+		clientCheck("the Crew button sits under Shop and Race", shopButton and crewButton
+			and crewButton.AbsolutePosition.Y > shopButton.AbsolutePosition.Y + 60)
 	end)
 	return
 end
