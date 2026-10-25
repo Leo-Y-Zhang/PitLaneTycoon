@@ -7,9 +7,14 @@ local DataStoreService = game:GetService("DataStoreService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local Debris = game:GetService("Debris")
 local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Scenery = require(script.Parent:WaitForChild("Scenery"))
+local SaveLock = require(script.Parent:WaitForChild("SaveLock"))
+local Analytics = require(script.Parent:WaitForChild("Analytics"))
+-- this server's name on a save lock (Studio has no JobId)
+local JOB = game.JobId ~= "" and game.JobId or ("studio-" .. HttpService:GenerateGUID(false))
 -- Studio only: a finished garage with no username on show, for thumbnails (tools/studio-test)
 local PHOTO_MODE = RunService:IsStudio() and workspace:GetAttribute("PhotoMode") == true
 Scenery.lighting()
@@ -122,14 +127,19 @@ end
 type Data = {
 	cash: number, bought: { [string]: boolean }, season: number, lastDaily: number, streak: number,
 	receipts: { [string]: boolean }, earned: number, lastSeen: number, offlineRate: number,
+	funnel: number, -- the furthest onboarding-funnel step logged (Analytics)
 }
-type State = { data: Data, plot: any?, pending: number, canSave: boolean, passes: { [string]: boolean }, dirty: boolean, friends: number }
+type State = {
+	data: Data, plot: any?, pending: number, canSave: boolean, passes: { [string]: boolean }, dirty: boolean, friends: number,
+	leaving: boolean, released: boolean, -- the leaving save is under way / has let go of the lock
+	unlogged: number, -- factory income not yet sent to analytics (sent once a minute)
+}
 local states: { [Player]: State } = {}
 
 local function freshData(): Data
 	return {
 		cash = 0, bought = {}, season = 0, lastDaily = 0, streak = 0, receipts = {},
-		earned = 0, lastSeen = 0, offlineRate = 0,
+		earned = 0, lastSeen = 0, offlineRate = 0, funnel = 0,
 	}
 end
 
@@ -247,6 +257,7 @@ local function addCash(player: Player, amount: number, fromFactory: boolean?)
 	st.data.cash += amount
 	if fromFactory then
 		st.data.earned += amount -- only factory income counts for the leaderboard
+		st.unlogged += amount
 	end
 	st.dirty = true
 	publish(player)
@@ -401,6 +412,13 @@ local function tryBuy(player: Player, index: number)
 	publish(player)
 	notify:FireClient(player, "Bought " .. item.name)
 	effect:FireClient(player, "bought", item.key)
+	Analytics.spent(player, item.cost, st.data.cash, Enum.AnalyticsEconomyTransactionType.Shop, item.key)
+	local purchases = -1 -- the first press is free
+	for _ in st.data.bought do
+		purchases += 1
+	end
+	local step = item.kind == "trophy" and Analytics.Step.trophy or Analytics.purchaseStep(purchases)
+	st.data.funnel = Analytics.funnel(player, st.data.funnel, step)
 end
 
 local function bankPending(player: Player)
@@ -506,50 +524,82 @@ part({ Name = "Paddock", Size = Vector3.new(2 * Config.PlotRadius + 140, 1, 2 * 
 Scenery.paddock(Config.PlotCount, Config.PlotRadius, 26)
 
 -- saving ----------------------------------------------------------------------------
-local function save(player: Player): boolean
+-- Saves are session-locked (SaveLock): a server writes a player's save only while it holds
+-- that save's lock, so a server hop can't load an old save or overwrite a newer one.
+local savesInFlight = 0
+
+-- release = the player is leaving: let go of the lock so their next server loads at once
+local function save(player: Player, release: boolean?): boolean
 	local st = states[player]
-	if not st or not st.canSave or not store then return false end
+	if not st or not st.canSave or st.released or not store then return false end
 	st.data.lastSeen = os.time()
 	st.data.offlineRate = incomePerMinute(st, true)
-	local snapshot = table.clone(st.data)
-	local ok, err = pcall(function()
-		store:UpdateAsync("u_" .. player.UserId, function()
-			return snapshot
-		end)
-	end)
-	if ok then
+	local wasDirty = st.dirty
+	savesInFlight += 1
+	local written, lost, err = SaveLock.save(store, "u_" .. player.UserId, table.clone(st.data), JOB, os.time(), release)
+	savesInFlight -= 1
+	if written then
 		st.dirty = false
+		st.released = release == true
+	elseif lost then
+		-- another server took this save over after this one stopped saving for too long;
+		-- its copy is the newer one, so this server must not write again
+		st.canSave = false
+		warn("[PitLane] " .. player.Name .. "'s save is held by another server; no longer saving here")
 	else
 		warn("[PitLane] save failed for " .. player.Name .. ": " .. tostring(err))
 	end
 	-- the game's owner never appears on the public board
 	local isOwner = game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
-	if board and st.data.earned >= 1 and not isOwner then
+	if written and wasDirty and board and st.data.earned >= 1 and not isOwner then
 		pcall(function()
 			board:SetAsync("u_" .. player.UserId, math.floor(st.data.earned))
 		end)
 	end
-	return ok
+	return written
 end
 
 local function load(player: Player): (Data, boolean)
 	if not store then
 		return freshData(), false
 	end
-	local ok, result = pcall(function()
-		return store:GetAsync("u_" .. player.UserId)
-	end)
-	if not ok then
-		-- never overwrite a save we could not read
+	local told = false
+	local result, status = SaveLock.open(store, "u_" .. player.UserId, JOB, {
+		now = function()
+			return os.time()
+		end,
+		wait = function(seconds: number)
+			task.wait(seconds)
+		end,
+		held = function()
+			if not told then
+				told = true
+				notify:FireClient(player, "Fetching your garage from your last server...")
+			end
+		end,
+		gone = function()
+			return player.Parent == nil
+		end,
+		stale = Config.SaveLock.staleSeconds,
+		retry = Config.SaveLock.retrySeconds,
+		giveUp = Config.SaveLock.giveUpSeconds,
+	})
+	if status ~= "ok" then
+		-- never overwrite a save we could not read, or one another server still holds
 		return freshData(), false
 	end
 	local data = freshData()
-	if type(result) == "table" then
-		for k, v in result do
-			(data :: any)[k] = v
-		end
+	for k, v in result or {} do
+		(data :: any)[k] = v
 	end
 	return data, true
+end
+
+local function flushAnalytics(player: Player, st: State)
+	if st.unlogged >= 1 then
+		Analytics.earned(player, st.unlogged, st.data.cash, Enum.AnalyticsEconomyTransactionType.Gameplay, "Factory")
+		st.unlogged = 0
+	end
 end
 
 -- passes ----------------------------------------------------------------------------
@@ -603,6 +653,7 @@ MarketplaceService.ProcessReceipt = function(receipt)
 				return Enum.ProductPurchaseDecision.NotProcessedYet
 			end
 			notify:FireClient(player, product.name .. ": +" .. money(amount))
+			Analytics.earned(player, amount, st.data.cash, Enum.AnalyticsEconomyTransactionType.IAP, product.name)
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		end
 	end
@@ -618,6 +669,7 @@ newSeason.OnServerEvent:Connect(function(player)
 		notify:FireClient(player, "A new season needs " .. money(cost))
 		return
 	end
+	Analytics.spent(player, st.data.cash, 0, Enum.AnalyticsEconomyTransactionType.Gameplay, "NewSeason")
 	st.data.season += 1
 	st.data.cash = 0
 	st.data.bought = { [Config.Items[1].key] = true }
@@ -627,6 +679,7 @@ newSeason.OnServerEvent:Connect(function(player)
 	publish(player)
 	save(player)
 	notify:FireClient(player, ("Season %d! Earnings now x%.1f"):format(st.data.season + 1, multiplier(st)))
+	st.data.funnel = Analytics.funnel(player, st.data.funnel, Analytics.Step.newSeason)
 end)
 
 local function dailyReward(player: Player, st: State)
@@ -639,6 +692,7 @@ local function dailyReward(player: Player, st: State)
 	local reward = math.max(Config.DailyRewards.cash[day] * multiplier(st), incomePerMinute(st) * Config.DailyRewards.minutes[day])
 	addCash(player, reward)
 	notify:FireClient(player, ("Day %d streak: +%s"):format(st.data.streak, money(reward)))
+	Analytics.earned(player, reward, st.data.cash, Enum.AnalyticsEconomyTransactionType.TimedReward, "DailyStreak")
 end
 
 local function offlineEarnings(player: Player, st: State)
@@ -648,6 +702,7 @@ local function offlineEarnings(player: Player, st: State)
 	local amount = math.floor(st.data.offlineRate * minutes * Config.Offline.share)
 	if amount <= 0 then return end
 	addCash(player, amount)
+	Analytics.earned(player, amount, st.data.cash, Enum.AnalyticsEconomyTransactionType.TimedReward, "Offline")
 	task.delay(3, function() -- after the daily-reward message
 		notify:FireClient(player, "Your factory made " .. money(amount) .. " while you were away")
 	end)
@@ -771,8 +826,17 @@ local function onPlayerAdded(player: Player)
 	ls.Parent = player
 
 	local data, canSave = load(player)
-	if not player.Parent then return end
-	local st: State = { data = data, plot = nil, pending = 0, canSave = canSave, passes = {}, dirty = false, friends = 0 }
+	if not player.Parent then
+		-- left while loading: let go of the save, unchanged, so their next server needn't wait
+		if canSave then
+			SaveLock.save(store, "u_" .. player.UserId, data, JOB, os.time(), true)
+		end
+		return
+	end
+	local st: State = {
+		data = data, plot = nil, pending = 0, canSave = canSave, passes = {}, dirty = false, friends = 0,
+		leaving = false, released = false, unlogged = 0,
+	}
 	states[player] = st
 	checkPasses(player, st)
 	st.data.bought[Config.Items[1].key] = true -- the first press is free
@@ -792,6 +856,7 @@ local function onPlayerAdded(player: Player)
 	end
 	rebuildPlot(player)
 	publish(player)
+	st.data.funnel = Analytics.funnel(player, st.data.funnel, Analytics.Step.joined)
 	if not canSave and store then
 		notify:FireClient(player, "Saving is unavailable right now; progress this visit may not save.")
 	end
@@ -820,7 +885,9 @@ end
 Players.PlayerRemoving:Connect(function(player)
 	local st = states[player]
 	if not st then return end
-	save(player)
+	st.leaving = true
+	flushAnalytics(player, st)
+	save(player, true)
 	if st.plot then
 		st.plot.owner = nil
 		st.plot.signLabel.Text = "Free garage"
@@ -839,16 +906,14 @@ end)
 
 game:BindToClose(function()
 	if RunService:IsStudio() and not store then return end
-	local saving = 0
-	for player in states do
-		saving += 1
-		task.spawn(function()
-			save(player)
-			saving -= 1
-		end)
+	for player, st in states do
+		if not st.leaving then -- otherwise PlayerRemoving is already saving them
+			st.leaving = true
+			task.spawn(save, player, true)
+		end
 	end
 	local started = os.clock()
-	while saving > 0 and os.clock() - started < 25 do -- Roblox allows 30 s here
+	while savesInFlight > 0 and os.clock() - started < 25 do -- Roblox allows 30 s here
 		task.wait(0.2)
 	end
 end)
@@ -880,8 +945,10 @@ end)
 task.spawn(function()
 	while true do
 		task.wait(Config.AutosaveSeconds)
+		-- everyone, changed or not: each save also tells other servers this lock is alive
 		for player, st in states do
-			if st.dirty then
+			if not st.leaving then
+				flushAnalytics(player, st)
 				task.spawn(save, player)
 			end
 		end

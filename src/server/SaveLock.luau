@@ -26,11 +26,26 @@ export type Options = {
 
 -- UpdateAsync transform for loading: take the save unless a live server holds it
 function SaveLock.claim(record: Record?, job: string, now: number, stale: number): (Record?, boolean)
-	return table.clone(record or {}), true -- no lock: like v0.3
+	local lock = record and record.lock
+	if lock and lock.job ~= job and now - lock.at < stale then
+		return nil, false -- returning nil leaves the save untouched
+	end
+	local claimed = table.clone(record or {})
+	claimed.lock = { job = job, at = now }
+	return claimed, true
 end
 
+-- UpdateAsync transform for saving: write only while this server still holds the lock
 function SaveLock.write(record: Record?, data: Record, job: string, now: number, release: boolean?): (Record?, boolean)
-	return table.clone(data), true -- no lock: like v0.3
+	local lock = record and record.lock
+	if not (lock and lock.job == job) then
+		-- another server took the save over (or this server already let go): its copy is
+		-- the newer one
+		return nil, false
+	end
+	local out = table.clone(data)
+	out.lock = if release then nil else { job = job, at = now }
+	return out, true
 end
 
 -- Load and lock a player's save. Returns the save (nil for a new player) and a status:
