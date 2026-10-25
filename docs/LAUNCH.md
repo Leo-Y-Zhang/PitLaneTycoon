@@ -77,6 +77,11 @@ before applying.
   rewards don't count, so it can't be bought). The game's owner is never shown on it.
 - **Happy hour:** 2x earnings every Saturday and Sunday at 18:00 UTC (19:00 UK summer time,
   18:00 in winter), so players gather at the same time. Mention it in the description.
+- **Sound and feel (25 Oct 2026):** four APM Music tracks in a shuffled loop; Pro Sound Effects
+  clicks, cash registers and a swish as each garage piece rises (all Roblox-licensed, checked
+  with `run.py --audio`). A settings button (top left) turns music and sounds on or off, kept
+  with the save. Buttons grow under the pointer and dip when pressed. On a computer the top
+  bar moves left in a narrow window, so Roblox's player list no longer covers it.
 - **Goals, gifts and codes (25 Oct 2026):** a goal panel shows one goal at a time from a chain
   of 16 (bank your first cash, buy 2 machines, drive a clean lap, ... start season 4); each
   pays a few minutes of income, so there is always a next step. A gift can be claimed every 10

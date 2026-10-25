@@ -16,6 +16,11 @@ sound loads and that banking shows a +$ pop-up. It prints PASS or FAIL for each 
 errors the game logged, then removes the plugin. It never publishes anything. The latest place
 file is a CI artifact (`PitLaneTycoon-place`) on every run.
 
+Sound: every effect and music track loads, music plays, the music setting turns it off and on
+again, the settings button sits top left, buttons respond to the pointer, and (screen unlocked)
+the top bar stays clear of the player list. `run.py --audio` checks every id in `Config.Audio`
+belongs to a Roblox-licensed library (it failed on a build without `Config.Audio`).
+
 Goals: the first goal is to bank cash, banking meets it and shows "Buy 2 machines", two
 machines show "Drive a clean lap", and the lap shows "Buy 5 machines"; the panel shows the
 current goal. The first gift is ten minutes away, its button counts down, and claiming early
@@ -51,7 +56,9 @@ line. Five deliberate bugs (no teleport check, laps counted backwards, no neares
 steering reversed, a track through the garages) each failed it on 25 Oct 2026.
 `luau tests/Garage.spec.luau` checks the garage plan: a free plot is all building site, the
 pieces go up in order and all before the trophy, each site prop is cleared by one piece, and
-a new season keeps the shell. `luau tests/Goals.spec.luau` checks every goal can be met where
+a new season keeps the shell. `luau tests/Layout.spec.luau` checks the top bar stays clear of
+the player list and the settings button in every computer window from 640 px wide, stays
+centred on phones, and that the left buttons end above the thumbstick. `luau tests/Goals.spec.luau` checks every goal can be met where
 it stands in the chain (purchase goals within a season's line, lap times within reach of that
 season's car), how progress is counted, and that codes are well formed and not in the shared
 Config.
