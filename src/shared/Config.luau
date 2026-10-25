@@ -101,6 +101,10 @@ Config.LeaderboardSize = 10
 Config.LeaderboardRefreshSeconds = 120
 
 Config.AutosaveSeconds = 60
+-- Session locking (src/server/SaveLock.luau): a server holding a save refreshes its lock at
+-- every autosave, so a lock older than staleSeconds belongs to a server that crashed. A
+-- server hop normally waits one retry; stale must stay well above AutosaveSeconds.
+Config.SaveLock = { staleSeconds = 150, retrySeconds = 6, giveUpSeconds = 300 }
 Config.DataStoreName = "PitLaneTycoon_v1"
 Config.PlotCount = 6
 Config.PlotRadius = 90

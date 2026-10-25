@@ -323,6 +323,7 @@ local function run()
 	check("first press is built", plot.Items:FindFirstChild("press1"))
 	check("the next purchase is published", player:GetAttribute("NextKey") == "press2"
 		and player:GetAttribute("NextCost") == 60, player:GetAttribute("NextKey"))
+	check("the analytics funnel logs the join", player:GetAttribute("FunnelStep") == 1, player:GetAttribute("FunnelStep"))
 
 	local character = waitFor(function()
 		local c = player.Character
@@ -395,6 +396,7 @@ local function run()
 	end, 3))
 	check("it cost $60", cash.Value <= cashBefore - 60 + 15, ("%d -> %d"):format(cashBefore, cash.Value))
 	check("income rises to $210/min", player:GetAttribute("IncomePerMin") == 210 * x, player:GetAttribute("IncomePerMin"))
+	check("the funnel logs the first purchase", player:GetAttribute("FunnelStep") == 2, player:GetAttribute("FunnelStep"))
 	local pad3 = plot:FindFirstChild("Buy_speed1") :: BasePart
 	check("the next pad lights up", pad3 and pad3.Transparency == 0 and pad3.CanTouch)
 	check("the bought pad goes dark", pad2.Transparency == 1 and not pad2.CanTouch)
@@ -415,6 +417,15 @@ local function run()
 	-- 9 -> 14 studs/s runs both presses 14/9 as fast: $210/min becomes $326/min
 	check("a faster conveyor speeds every press up", player:GetAttribute("IncomePerMin") == math.floor(210 * 14 / 9 * x),
 		player:GetAttribute("IncomePerMin"))
+
+	-- the game's own warnings: a failing analytics call or save warns once
+	local own = {}
+	for _, message in warnings do
+		if string.find(message, "[PitLane]", 1, true) then
+			table.insert(own, message)
+		end
+	end
+	check("the game logged no warnings of its own", #own == 0, own[1])
 
 	-- leave the character somewhere visible for a screenshot
 	character:PivotTo(base.CFrame * CFrame.new(-8, 4, -14) * CFrame.Angles(0, math.rad(200), 0))
