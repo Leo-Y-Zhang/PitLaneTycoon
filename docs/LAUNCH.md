@@ -127,7 +127,7 @@ before applying.
   with the save. Buttons grow under the pointer and dip when pressed. On a computer the top
   bar moves left in a narrow window, so Roblox's player list no longer covers it.
 - **Goals, gifts and codes (25 Oct 2026):** a goal panel shows one goal at a time from a chain
-  of 16 (bank your first cash, buy 2 machines, drive a clean lap, ... start season 4); each
+  of 17 (bank your first cash, buy 2 machines, drive a clean lap, ... start season 4); each
   pays a few minutes of income, so there is always a next step. A gift can be claimed every 10
   minutes played (they don't pile up, so players come back to the panel). Codes are typed in
   the shop and pay once per player; they live in `src/server/Codes.luau`, on the server, so
