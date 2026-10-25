@@ -28,6 +28,8 @@ jobs:
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: The economy keeps its pacing
         run: python3 tools/balance.py
+      - name: Luau unit tests (save locking)
+        run: for f in tests/*.spec.luau; do luau "$f"; done
       - name: Every Luau file compiles
         run: find src -name '*.luau' -print0 | xargs -0 -n1 luau-compile > /dev/null
       - name: The place file builds
