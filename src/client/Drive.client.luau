@@ -72,7 +72,7 @@ local goBeep = sound("go", false, 0.6)
 -- the start lights on the gantry, changed only on this player's screen
 local RED_ON, RED_OFF = Color3.fromRGB(255, 40, 40), Color3.fromRGB(40, 12, 12)
 local function setLights(lit: number)
-	local track = workspace:FindFirstChild("Track")
+	local track = workspace:FindFirstChild(player:GetAttribute("Layout") == "long" and "LongTrack" or "Track")
 	for i = 1, 5 do
 		local light = track and track:FindFirstChild("StartLight" .. i) :: BasePart?
 		if light then
@@ -110,9 +110,11 @@ local function refreshPanel(go: boolean, lit: number)
 		clock.Text = lapTime(math.max(0, workspace:GetServerTimeNow() - start))
 		clock.TextColor3 = INK
 	end
-	local reverse = player:GetAttribute("Layout") == "reverse"
-	local last, best = player:GetAttribute("LastLap"), player:GetAttribute(reverse and "BestLapReverse" or "BestLap") or 0
-	times.Text = ("%sLast %s   Best %s"):format(reverse and "Reverse GP   " or "", last and lapTime(last) or "-",
+	local layout = player:GetAttribute("Layout")
+	local field = if layout == "reverse" then "BestLapReverse" elseif layout == "long" then "BestLapLong" else "BestLap"
+	local name = if layout == "reverse" then "Reverse GP   " elseif layout == "long" then "Endurance   " else ""
+	local last, best = player:GetAttribute("LastLap"), player:GetAttribute(field) or 0
+	times.Text = ("%sLast %s   Best %s"):format(name, last and lapTime(last) or "-",
 		best > 0 and lapTime(best) or "-")
 end
 
@@ -163,8 +165,9 @@ RunService.Heartbeat:Connect(function(dt)
 	local forward = Vector3.new(look.X, 0, look.Z).Unit
 	local velocity = chassis.AssemblyLinearVelocity
 	local flat = Vector3.new(velocity.X, 0, velocity.Z)
-	local _, offset = TrackShape.nearest(Config.Track, chassis.Position.X, chassis.Position.Z)
-	local offroad = math.abs(offset) > Config.Track.halfWidth + 1
+	local shape = if player:GetAttribute("Layout") == "long" then Config.LongTrack else Config.Track
+	local _, offset = TrackShape.nearest(shape, chassis.Position.X, chassis.Position.Z)
+	local offroad = math.abs(offset) > shape.halfWidth + 1
 	local along = flat:Dot(forward)
 	local top = car:GetAttribute("TopSpeed") or Config.Drive.topSpeed
 	-- held on the grid until the lights go out. In Studio a test holds a pedal with the

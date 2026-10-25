@@ -25,7 +25,9 @@ codes typed in the shop pay once each. Rare Gold and Rainbow parts turn up on th
 Between purchases, take your team's car out on the time-trial track round the paddock (the
 Race button, or Drive at the show car). The server times every lap, a clean lap pays, and the
 fastest laps go on a board at the spawn. The car gets faster every season, and from season 2
-the Reverse GP runs the circuit the other way round.
+the Reverse GP runs the circuit the other way round. From season 3 the Endurance circuit opens:
+a longer loop round the outside of the Grand Prix track, about 1.7 of its laps, with its own
+board.
 
 All of it is code (Luau, synced with [Rojo](https://rojo.space)). The map is built by the
 server at start-up, so the place file needs nothing made by hand.

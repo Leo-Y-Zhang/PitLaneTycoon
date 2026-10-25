@@ -227,13 +227,14 @@ Config.Track = {
 	limit = 13,
 	reverseFromSeason = 1, -- the Reverse GP (the same circuit the other way) opens in season 2
 }
--- MUTANT (dropped before merge): overlaps the Grand Prix track, too short, opens with the Reverse GP
+-- The Endurance circuit: a longer loop round the outside of the Grand Prix track, about 1.7
+-- of its laps, with grass between the two. It opens in season fromSeason + 1 (season 3).
 Config.LongTrack = {
-	radius = 200,
+	radius = 300,
 	waves = { { 40, 3, 2.0 }, { 14, 6, 1.5 }, { 6, 11, 0.7 } },
 	halfWidth = 8,
 	limit = 13,
-	fromSeason = 1,
+	fromSeason = 2,
 }
 -- The race car (src/shared/DriveModel.luau). Speeds in studs per second; it gets faster
 -- every season. A clean lap pays lapRewardMinutes of income, a new best lap bestLapMinutes
@@ -245,6 +246,7 @@ Config.Drive = {
 }
 Config.LapBoardName = "PitLaneTycoon_BestLap_v1"
 Config.LapBoardReverseName = "PitLaneTycoon_BestLapReverse_v1"
+Config.LapBoardLongName = "PitLaneTycoon_BestLapLong_v1"
 
 -- Leaderboard of factory earnings across all seasons (bought cash and rewards don't count).
 Config.LeaderboardName = "PitLaneTycoon_Earned_v1"
