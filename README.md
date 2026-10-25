@@ -18,7 +18,8 @@ codes typed in the shop pay once each.
 
 Between purchases, take your team's car out on the time-trial track round the paddock (the
 Race button, or Drive at the show car). The server times every lap, a clean lap pays, and the
-fastest laps go on a board at the spawn. The car gets faster every season.
+fastest laps go on a board at the spawn. The car gets faster every season, and from season 2
+the Reverse GP runs the circuit the other way round.
 
 All of it is code (Luau, synced with [Rojo](https://rojo.space)). The map is built by the
 server at start-up, so the place file needs nothing made by hand.
