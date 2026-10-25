@@ -29,7 +29,9 @@ current goal. The first gift is ten minutes away, its button counts down, and cl
 is refused. After the drive, a code typed as " pitlane " pays, pays only once, a wrong code is
 turned down, and the code list is nowhere players can read it.
 
-The garage: a free plot is a building site and so is a new team's; the first purchase lays
+The garage: a first-season garage has the day look; the first press is a stamping press with a
+die and makes bolts (each press makes its own part). A free plot is a building site and so is a
+new team's; the first purchase lays
 the floor and clears the cones, the second raises the back wall and takes the scaffolding down.
 
 Then the time trial: the track, the show car's Drive prompt and the Fastest laps board are
