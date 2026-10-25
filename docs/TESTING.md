@@ -16,7 +16,11 @@ sound loads and that banking shows a +$ pop-up. It prints PASS or FAIL for each 
 errors the game logged, then removes the plugin. It never publishes anything. The latest place
 file is a CI artifact (`PitLaneTycoon-place`) on every run.
 
-A new player gets the welcome card, and buying a machine puts it away.
+A new player gets the welcome card, and buying a machine puts it away. A live event started by
+the test (a short Safety car) doubles income, shows on its strip and ends on time; a forced Gold
+part glows and is worth five times a normal one. (The speed readout check failed twice in four
+runs on 25 Oct 2026 while the car demonstrably reversed in the others: the test's brake input
+is flaky, not the game.)
 
 Sound: every effect and music track loads, music plays, the music setting turns it off and on
 again, the settings button sits top left, buttons respond to the pointer, and (screen unlocked)
