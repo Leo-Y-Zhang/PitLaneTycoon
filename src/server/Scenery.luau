@@ -111,25 +111,12 @@ function Scenery.paddock(plotCount: number, plotRadius: number, frontGap: number
 	sign(title, Enum.NormalId.Front, "PIT LANE TYCOON", Color3.fromRGB(255, 205, 60))
 end
 
--- walls, roof and a team-colour band around a plot (plot-local frame: -Z faces the spawn)
-function Scenery.garage(model: Instance, cf: CFrame, team: { name: string, colour: Color3 })
+-- the fittings every plot has from the start: hazard stripes at the conveyor ends and its
+-- side rails (plot-local frame: -Z faces the spawn)
+function Scenery.garage(model: Instance, cf: CFrame)
 	local g = Instance.new("Folder")
-	g.Name = "Garage"
+	g.Name = "Fittings"
 	g.Parent = model
-	local back = block(g, cf * CFrame.new(0, 6, 25.5), Vector3.new(64, 12, 1), WALL, Enum.Material.Concrete)
-	back.CanCollide = true
-	for _, x in { -31.5, 31.5 } do
-		local side = block(g, cf * CFrame.new(x, 6, 10), Vector3.new(1, 12, 32), WALL, Enum.Material.Concrete)
-		side.CanCollide = true
-		block(g, cf * CFrame.new(x, 10.5, 10), Vector3.new(1.15, 1.2, 32.1), team.colour)
-	end
-	block(g, cf * CFrame.new(0, 10.5, 24.9), Vector3.new(62, 1.2, 0.3), team.colour)
-	block(g, cf * CFrame.new(0, 12.5, 22), Vector3.new(65, 1, 8.5), CARBON, Enum.Material.Metal) -- awning, leaves the car in the sun
-	local name = block(g, cf * CFrame.new(0, 7, 24.9), Vector3.new(30, 4.5, 0.2), WALL)
-	name.Transparency = 1
-	sign(name, Enum.NormalId.Front, string.upper(team.name), team.colour)
-	-- coloured trim round the floor and hazard stripes at the conveyor ends
-	block(g, cf * CFrame.new(0, 0.05, -25.8), Vector3.new(64, 0.12, 0.4), team.colour)
 	for _, x in { -23.5, 23.5 } do
 		for k = 0, 2 do
 			block(g, cf * CFrame.new(x, 1.55, -2 + k * 2), Vector3.new(1, 0.08, 1),
@@ -139,6 +126,152 @@ function Scenery.garage(model: Instance, cf: CFrame, team: { name: string, colou
 	for _, z in { -3.2, 3.2 } do -- conveyor side rails
 		block(g, cf * CFrame.new(0, 1.9, z), Vector3.new(48, 0.4, 0.4), Color3.fromRGB(150, 155, 162), Enum.Material.Metal)
 	end
+end
+
+local ORANGE = Color3.fromRGB(255, 120, 20)
+local STEEL = Color3.fromRGB(150, 155, 162)
+local CONCRETE = Color3.fromRGB(196, 200, 206)
+
+-- one piece of a team's garage, which goes up as the team buys machines (Config.GaragePieces)
+function Scenery.garagePiece(name: string, parent: Instance, cf: CFrame, team: { name: string, colour: Color3 }): Model
+	local m = Instance.new("Model")
+	m.Name = name
+	local function p(x: number, y: number, z: number, sx: number, sy: number, sz: number, c: Color3, mat: Enum.Material?): Part
+		return block(m, cf * CFrame.new(x, y, z), Vector3.new(sx, sy, sz), c, mat)
+	end
+	if name == "Floor" then
+		local floor = p(0, 0.05, 0, 64, 0.1, 52, Color3.fromRGB(36, 40, 46))
+		floor.Reflectance = 0.08
+		for _, z in { -6.5, 6.5 } do
+			p(0, 0.11, z, 60, 0.02, 0.5, team.colour) -- painted lane lines
+		end
+		p(0, 0.06, -25.8, 64, 0.12, 0.4, team.colour)
+	elseif name == "BackWall" then
+		p(0, 6, 25.5, 64, 12, 1, WALL, Enum.Material.Concrete).CanCollide = true
+	elseif name == "SideWalls" then
+		for _, x in { -31.5, 31.5 } do
+			p(x, 6, 10, 1, 12, 32, WALL, Enum.Material.Concrete).CanCollide = true
+		end
+	elseif name == "Livery" then
+		for _, x in { -31.5, 31.5 } do
+			p(x, 10.5, 10, 1.15, 1.2, 32.1, team.colour)
+		end
+		p(0, 10.5, 24.9, 62, 1.2, 0.3, team.colour)
+		local nameplate = p(0, 7, 24.9, 30, 4.5, 0.2, WALL)
+		nameplate.Transparency = 1
+		sign(nameplate, Enum.NormalId.Front, string.upper(team.name), team.colour)
+	elseif name == "Awning" then
+		p(0, 12.5, 22, 65, 1, 8.5, CARBON, Enum.Material.Metal) -- leaves the car in the sun
+		for _, x in { -20, 0, 20 } do
+			p(x, 11.6, 18.2, 0.4, 0.8, 0.4, STEEL, Enum.Material.Metal)
+		end
+	elseif name == "Lights" then
+		for _, x in { -20, 0, 20 } do -- strip lights under the awning
+			local strip = p(x, 11.9, 21, 8, 0.25, 0.8, Color3.fromRGB(240, 246, 255), Enum.Material.Neon)
+			local light = Instance.new("SpotLight")
+			light.Face = Enum.NormalId.Bottom
+			light.Range, light.Angle, light.Brightness = 26, 110, 1.6
+			light.Parent = strip
+		end
+		for _, x in { -30, 30 } do -- floodlight masts at the front corners
+			p(x, 8, -24, 0.6, 16, 0.6, CARBON, Enum.Material.Metal)
+			local head = p(x - math.sign(x) * 0.8, 16, -23.4, 2.4, 1.2, 0.8, Color3.fromRGB(240, 246, 255), Enum.Material.Neon)
+			local light = Instance.new("SpotLight")
+			light.Face = Enum.NormalId.Back
+			light.Range, light.Angle, light.Brightness = 40, 70, 1.2
+			light.Parent = head
+		end
+	elseif name == "PitWall" then
+		for _, x in { -22, 22 } do -- either side of the way in
+			local wall = p(x, 0.8, -24.6, 20, 1.6, 0.8, CONCRETE, Enum.Material.Concrete)
+			wall.CanCollide = true
+			p(x, 1.7, -24.6, 20.1, 0.2, 0.9, team.colour)
+			for _, dx in { -2.6, 2.6 } do
+				p(x + dx, 2.6, -24.6, 0.2, 2, 0.2, CARBON, Enum.Material.Metal)
+			end
+			local screen = p(x, 4.3, -24.6, 7, 2.4, 0.3, CARBON)
+			sign(screen, Enum.NormalId.Front, "PIT WALL", Color3.fromRGB(60, 230, 120))
+			sign(screen, Enum.NormalId.Back, "PIT WALL", Color3.fromRGB(60, 230, 120))
+		end
+	elseif name == "Kit" then
+		for _, at in { Vector3.new(27, 0, 21), Vector3.new(24, 0, 21), Vector3.new(-23, 0, 22) } do
+			for k = 0, 3 do -- a stack of tyres
+				local tyre = p(at.X, 0.5 + k * 0.95, at.Z, 0.9, 2.2, 2.2, CARBON)
+				tyre.Shape = Enum.PartType.Cylinder
+				tyre.CFrame = cf * CFrame.new(at.X, 0.5 + k * 0.95, at.Z) * CFrame.Angles(0, 0, math.rad(90))
+			end
+		end
+		p(27.5, 1.3, 12, 2.4, 2.6, 4, team.colour, Enum.Material.Metal) -- tool chest
+		for k = 0, 3 do
+			p(26.25, 0.6 + k * 0.55, 12, 0.05, 0.08, 3.6, STEEL, Enum.Material.Metal) -- its drawers
+		end
+		p(-29.5, 6, 24, 0.3, 12, 0.3, STEEL, Enum.Material.Metal) -- flagpole
+		p(-27.8, 10.6, 24, 3.2, 2, 0.1, team.colour, Enum.Material.Fabric)
+	elseif name == "UpperDeck" then
+		-- a second storey over the back of the garage: glass front, team band, roof sign
+		p(0, 16.5, 25.5, 64, 7, 1, WALL, Enum.Material.Concrete)
+		for _, x in { -31.5, 31.5 } do
+			p(x, 16.5, 21.5, 1, 7, 9, WALL, Enum.Material.Concrete)
+		end
+		local glass = p(0, 16.2, 17.3, 62, 6.4, 0.3, Color3.fromRGB(150, 200, 235), Enum.Material.Glass)
+		glass.Transparency = 0.45
+		for _, x in { -15.5, 0, 15.5 } do
+			p(x, 16.2, 17.2, 0.4, 6.4, 0.4, CARBON, Enum.Material.Metal) -- mullions
+		end
+		p(0, 20.3, 21.5, 65, 0.8, 9.6, CARBON, Enum.Material.Metal)
+		p(0, 19.6, 17, 65, 0.6, 0.3, team.colour)
+		local roofSign = p(0, 22.6, 24, 24, 3.6, 0.4, CARBON, Enum.Material.Metal)
+		sign(roofSign, Enum.NormalId.Front, string.upper(team.name) .. " RACING", team.colour)
+	end
+	m.Parent = parent
+	return m
+end
+
+-- building-site clutter on a plot whose garage is not up yet; each kind is cleared away by
+-- the piece that replaces it (Config.GaragePieces `clears`)
+function Scenery.siteProp(name: string, parent: Instance, cf: CFrame): Model
+	local m = Instance.new("Model")
+	m.Name = name
+	local function p(x: number, y: number, z: number, sx: number, sy: number, sz: number, c: Color3, mat: Enum.Material?): Part
+		return block(m, cf * CFrame.new(x, y, z), Vector3.new(sx, sy, sz), c, mat)
+	end
+	if name == "Cones" then
+		for _, at in { Vector2.new(-20, -20), Vector2.new(14, -21), Vector2.new(-28, 4), Vector2.new(28, -6),
+			Vector2.new(-10, 20), Vector2.new(20, 8) } do
+			p(at.X, 0.08, at.Y, 1.2, 0.16, 1.2, ORANGE)
+			local cone = p(at.X, 0.6, at.Y, 0.9, 0.7, 0.7, ORANGE)
+			cone.Shape = Enum.PartType.Cylinder
+			cone.CFrame = cf * CFrame.new(at.X, 0.6, at.Y) * CFrame.Angles(0, 0, math.rad(90))
+			local band = p(at.X, 0.65, at.Y, 0.2, 0.74, 0.74, WHITE)
+			band.Shape = Enum.PartType.Cylinder
+			band.CFrame = cf * CFrame.new(at.X, 0.65, at.Y) * CFrame.Angles(0, 0, math.rad(90))
+		end
+	elseif name == "Scaffold" then
+		for x = -30, 30, 10 do
+			for _, z in { 24.4, 26.2 } do
+				p(x, 6, z, 0.3, 12, 0.3, STEEL, Enum.Material.Metal)
+			end
+		end
+		for _, y in { 4, 8, 12 } do
+			p(0, y, 25.3, 61, 0.25, 1.9, Color3.fromRGB(176, 132, 84), Enum.Material.WoodPlanks)
+			p(0, y + 1, 24.4, 60.6, 0.15, 0.15, STEEL, Enum.Material.Metal)
+		end
+	elseif name == "Fence" then
+		for _, x in { -31.5, 31.5 } do
+			for z = -4, 24, 4 do
+				p(x, 1.2, z, 0.12, 2.2, 3.9, ORANGE, Enum.Material.Fabric).Transparency = 0.25
+				p(x, 1.25, z - 1.95, 0.25, 2.5, 0.25, STEEL, Enum.Material.Metal)
+			end
+		end
+	elseif name == "SiteSign" then
+		for _, x in { -5, 5 } do
+			p(x, 2.5, 23.5, 0.3, 5, 0.3, STEEL, Enum.Material.Metal)
+		end
+		local board = p(0, 4.2, 23.4, 12, 3, 0.25, Color3.fromRGB(250, 205, 40))
+		sign(board, Enum.NormalId.Front, "UNDER CONSTRUCTION", CARBON)
+	end
+	m.Parent = parent
+	return m
 end
 
 -- a show car built from parts; gold trim from season 2, a gold livery from season 4

@@ -365,6 +365,20 @@ local function run()
 	if not plot then
 		return
 	end
+	-- the garage builds itself: free plots are building sites, the player's grows with purchases
+	local function has(model: Instance, name: string): boolean
+		local garage = model:FindFirstChild("Garage")
+		return garage ~= nil and garage:FindFirstChild(name) ~= nil
+	end
+	local free = nil
+	for _, model in plotsFolder:GetChildren() do
+		if model ~= plot then
+			free = model
+		end
+	end
+	check("a free plot is a building site", free and has(free, "Scaffold") and has(free, "Fence") and has(free, "Cones")
+		and has(free, "SiteSign") and not has(free, "BackWall"))
+	check("a new team starts on a building site too", has(plot, "Cones") and not has(plot, "Floor"))
 
 	local ls = waitFor(function()
 		return player:FindFirstChild("leaderstats")
@@ -467,6 +481,9 @@ local function run()
 	check("it cost $60", cash.Value <= cashBefore - 60 + 15, ("%d -> %d"):format(cashBefore, cash.Value))
 	check("income rises to $210/min", player:GetAttribute("IncomePerMin") == 210 * x, player:GetAttribute("IncomePerMin"))
 	check("the funnel logs the first purchase", player:GetAttribute("FunnelStep") == 2, player:GetAttribute("FunnelStep"))
+	check("the first purchase lays the garage floor and clears the cones", waitFor(function()
+		return has(plot, "Floor") and not has(plot, "Cones")
+	end, 3))
 	local pad3 = plot:FindFirstChild("Buy_speed1") :: BasePart
 	check("the next pad lights up", pad3 and pad3.Transparency == 0 and pad3.CanTouch)
 	check("the bought pad goes dark", pad2.Transparency == 1 and not pad2.CanTouch)
@@ -484,6 +501,9 @@ local function run()
 	check("the faster conveyor is bought", waitFor(function()
 		return player:GetAttribute("NextKey") == "press3"
 	end, 3), player:GetAttribute("NextKey"))
+	check("the second raises the back wall and takes the scaffolding down", waitFor(function()
+		return has(plot, "BackWall") and not has(plot, "Scaffold")
+	end, 3))
 	-- 9 -> 14 studs/s runs both presses 14/9 as fast: $210/min becomes $326/min
 	check("a faster conveyor speeds every press up", player:GetAttribute("IncomePerMin") == math.floor(210 * 14 / 9 * x),
 		player:GetAttribute("IncomePerMin"))

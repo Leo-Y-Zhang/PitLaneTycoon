@@ -65,6 +65,22 @@ Config.Items = {
 	{ key = "trophy", name = "Constructors' trophy", cost = 9200000, kind = "trophy" },
 } :: { Item }
 
+-- The garage builds itself (src/server/GaragePlan.luau): a free plot is a building site, and
+-- each piece goes up once the team has made `at` purchases this season, clearing away the
+-- site prop it replaces. `keep` pieces stand from the start of later seasons, so a new season
+-- opens in the finished shell and builds the extras again.
+Config.GaragePieces = {
+	{ name = "Floor", label = "Epoxy floor", at = 1, keep = true, clears = "Cones" },
+	{ name = "BackWall", label = "Back wall", at = 2, keep = true, clears = "Scaffold" },
+	{ name = "SideWalls", label = "Side walls", at = 4, keep = true, clears = "Fence" },
+	{ name = "Livery", label = "Team colours", at = 6, keep = true, clears = "SiteSign" },
+	{ name = "Awning", label = "Awning", at = 8, keep = true },
+	{ name = "Lights", label = "Floodlights", at = 10 },
+	{ name = "PitWall", label = "Pit wall", at = 12 },
+	{ name = "Kit", label = "Tyres and tools", at = 14 },
+	{ name = "UpperDeck", label = "Upper deck", at = 16 },
+}
+
 Config.BaseConveyorSpeed = 9
 Config.PartLifetime = 25 -- seconds before an uncollected part is cleared
 
