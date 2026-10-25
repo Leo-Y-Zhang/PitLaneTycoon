@@ -69,6 +69,7 @@ Config.Items = {
 -- each piece goes up once the team has made `at` purchases this season, clearing away the
 -- site prop it replaces. `keep` pieces stand from the start of later seasons, so a new season
 -- opens in the finished shell and builds the extras again.
+export type GaragePiece = { name: string, label: string, at: number, keep: boolean?, clears: string? }
 Config.GaragePieces = {
 	{ name = "Floor", label = "Epoxy floor", at = 1, keep = true, clears = "Cones" },
 	{ name = "BackWall", label = "Back wall", at = 2, keep = true, clears = "Scaffold" },
@@ -79,7 +80,7 @@ Config.GaragePieces = {
 	{ name = "PitWall", label = "Pit wall", at = 12 },
 	{ name = "Kit", label = "Tyres and tools", at = 14 },
 	{ name = "UpperDeck", label = "Upper deck", at = 16 },
-}
+} :: { GaragePiece }
 
 Config.BaseConveyorSpeed = 9
 Config.PartLifetime = 25 -- seconds before an uncollected part is cleared
