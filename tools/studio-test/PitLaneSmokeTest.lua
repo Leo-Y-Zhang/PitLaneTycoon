@@ -183,12 +183,16 @@ local function photoShoot()
 			gui.Enabled = false
 		end
 	end
+	local sign = plot:FindFirstChild("Sign") -- the name board is a blank red block without its label
+	if sign and sign:IsA("BasePart") then
+		sign.LocalTransparencyModifier = 1
+	end
 	local base = (plot:FindFirstChild("Base") :: BasePart).CFrame
 	local cam = workspace.CurrentCamera
 	cam.CameraType = Enum.CameraType.Scriptable
 	cam.FieldOfView = 55
 	local shots = {
-		{ "hero", base * CFrame.new(-18, 16, -42), base * CFrame.new(2, 2, 6) },
+		{ "hero", base * CFrame.new(-22, 15, -38), base * CFrame.new(2, 3, 8) },
 		{ "car", base * CFrame.new(-12, 6, 4), base * CFrame.new(2.5, 1.4, 15) },
 		{ "line", base * CFrame.new(-22, 6, -12), base * CFrame.new(12, 2.5, 2) },
 		{ "paddock", base * CFrame.new(0, 48, -100), base * CFrame.new(0, 2, -10) },
