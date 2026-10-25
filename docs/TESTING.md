@@ -38,7 +38,8 @@ reverses it (the driving script and the car's motors work); the test then laps t
 the centre line at 50 studs/s and checks the server timed it (length / 50 to within 5%), paid
 for it and made it the best lap, that cutting across the infield voids the next lap, and that
 jumping out returns the player to their garage. On screen: the Race button becomes Leave car,
-and the lap panel and its clock show.
+the lap panel shows, the start lights count down and go out for GO, the engine runs, the speed
+shows in km/h while reversing, and the lap clock runs.
 
 It also checks that the onboarding funnel logs the join and the first purchase, and that the
 game logged no warnings of its own (a failing save or analytics call warns). Lock the screen

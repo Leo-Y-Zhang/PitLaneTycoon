@@ -63,4 +63,4 @@ phones and computer windows).
 
 Sounds and music come only from Roblox-licensed libraries (APM Music, Pro Sound Effects), listed
 in `Config.Audio`. `python tools/studio-test/run.py PitLaneTycoon.rbxlx --audio` checks every id
-belongs to one of them, and lists more to choose from.
+belongs to one of them; add `--search "Sound:tire squeal;Music:rock"` to find more.
