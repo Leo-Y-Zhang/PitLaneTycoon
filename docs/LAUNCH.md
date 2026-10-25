@@ -120,7 +120,10 @@ before applying.
   or a phone's thumbstick drive it, jump gets out. The server times every lap itself (track
   limits and teleports void a lap), so the Fastest laps board can't be faked. A clean lap pays
   15 seconds of income, a new best lap 2 minutes more, and the car is 5 studs/s faster each
-  season (65 up to 95), so every season's car has a lap record to beat. Put "drive your own F1
+  season (65 up to 95), so every season's car has a lap record to beat. Every drive opens with
+  an F1 start: five red lights on the gantry, a beep each, then lights out and GO. The engine
+  (a licensed race-car recording, pitched by speed) and squealing tyres are heard, and the lap
+  panel shows km/h. Put "drive your own F1
   car" in the description and a car on the track in a thumbnail.
 
 ## Saving across servers
