@@ -19,6 +19,7 @@ local Goals = require(script.Parent:WaitForChild("Goals"))
 local Codes = require(script.Parent:WaitForChild("Codes"))
 local Rarity = require(script.Parent:WaitForChild("Rarity"))
 local Likes = require(script.Parent:WaitForChild("Likes"))
+local Crew = require(script.Parent:WaitForChild("Crew"))
 local Analytics = require(script.Parent:WaitForChild("Analytics"))
 -- this server's name on a save lock (Studio has no JobId)
 local JOB = game.JobId ~= "" and game.JobId or ("studio-" .. HttpService:GenerateGUID(false))
@@ -65,6 +66,9 @@ local welcomed = remote("Welcomed") -- the first-visit card was read
 local redeem = Instance.new("RemoteFunction") -- a code in, a message back
 redeem.Name = "Redeem"
 redeem.Parent = remotes
+local openCrate = Instance.new("RemoteFunction") -- hire from a crew crate: the member's key back, or nil and why
+openCrate.Name = "OpenCrate"
+openCrate.Parent = remotes
 local effect = remote("Effect") -- purchase sparks and "+$" pop-ups, drawn by the owner's HUD
 
 local ITEM_BY_KEY = {}
@@ -148,12 +152,14 @@ type Data = {
 	welcomed: boolean, -- has seen the first-visit card
 	rares: { [string]: number }, -- rare parts collected, all seasons (the garage's case shows them)
 	likes: number, likedOn: { [string]: number }, -- likes this garage has had; whose garages this player liked today
+	crew: { [string]: number }, -- crew members hired, by key (all seasons)
 }
 type State = {
 	data: Data, plot: any?, pending: number, canSave: boolean, passes: { [string]: boolean }, dirty: boolean, friends: number,
 	leaving: boolean, released: boolean, -- the leaving save is under way / has let go of the lock
 	unlogged: number, -- factory income not yet sent to analytics (sent once a minute)
 	giftAt: number, lastRedeem: number, -- server time the next gift is ready; last code tried (os.clock)
+	lastCrate: number, -- last crew crate opened (os.clock)
 }
 local states: { [Player]: State } = {}
 
@@ -162,7 +168,7 @@ local function freshData(): Data
 		cash = 0, bought = {}, season = 0, lastDaily = 0, streak = 0, receipts = {},
 		earned = 0, lastSeen = 0, offlineRate = 0, funnel = 0, bestLap = 0, laps = 0, bestLapReverse = 0,
 		goal = 1, banks = 0, codes = {}, settings = { music = true, sfx = true }, welcomed = false,
-		rares = {}, likes = 0, likedOn = {},
+		rares = {}, likes = 0, likedOn = {}, crew = {},
 	}
 end
 
@@ -176,7 +182,7 @@ workspace:SetAttribute("HappyHour", happyHour)
 local liveEvent = nil -- the Config.Events entry running now, if any
 local rng = Random.new()
 
--- seasons and passes: the lasting part of the multiplier (offline earnings use only this)
+-- seasons and passes (a crew crate's price follows this, so it never counts the crew itself)
 local function baseMultiplier(st: State): number
 	local m = 1 + st.data.season * Config.SeasonBonus
 	if st.passes.DoubleCash then m *= 2 end
@@ -184,12 +190,28 @@ local function baseMultiplier(st: State): number
 	return m
 end
 
+-- what rare parts add to income, so a rare-part boost can be ranked against an income one
+local RARE_WORTH = Rarity.expected(1, Config.RareParts) - 1
+-- the crew members working in the garage: the best Config.Crew.slots of those hired
+local function crewWorking(st: State): { string }
+	return Crew.best(st.data.crew, Config.Crew.members, Config.Crew.slots, RARE_WORTH)
+end
+local function crewBoost(st: State): (number, number)
+	return Crew.boost(crewWorking(st), Config.Crew.members)
+end
+
+-- seasons, passes and the crew: the lasting part of the multiplier (offline earnings use only this)
+local function lastingMultiplier(st: State): number
+	local income = crewBoost(st)
+	return baseMultiplier(st) * income
+end
+
 local function friendBoost(st: State): number
 	return math.min(st.friends, Config.FriendBoostMax) * Config.FriendBoost
 end
 
 local function multiplier(st: State): number
-	return baseMultiplier(st) * (1 + friendBoost(st)) * (happyHour and Config.HappyHour.mult or 1)
+	return lastingMultiplier(st) * (1 + friendBoost(st)) * (happyHour and Config.HappyHour.mult or 1)
 		* (liveEvent and liveEvent.incomeMult or 1)
 end
 
@@ -230,14 +252,19 @@ local function gateMultiplier(st: State): number
 	return m
 end
 
-local function incomePerMinute(st: State, lastingOnly: boolean?): number
+-- what the line makes a minute before any multiplier
+local function factoryPerMinute(st: State): number
 	local perMin = 0
 	for _, item in Config.Items do
 		if item.kind == "press" and st.data.bought[item.key] then
 			perMin += pressValue(st, item) / pressInterval(st, item) * 60
 		end
 	end
-	return perMin * gateMultiplier(st) * (lastingOnly and baseMultiplier(st) or multiplier(st))
+	return perMin * gateMultiplier(st)
+end
+
+local function incomePerMinute(st: State, lastingOnly: boolean?): number
+	return factoryPerMinute(st) * (lastingOnly and lastingMultiplier(st) or multiplier(st))
 end
 
 local function nextItemIndex(st: State): number?
@@ -256,6 +283,15 @@ local function purchasesOf(st: State): number
 		n += 1
 	end
 	return math.max(0, n)
+end
+
+-- the crew: crates open after a few machines (and for good once a team has hired anyone)
+local function crewUnlocked(st: State): boolean
+	return st.data.season > 0 or next(st.data.crew) ~= nil or purchasesOf(st) >= Config.Crew.unlockPurchases
+		or (RunService:IsStudio() and workspace:GetAttribute("PLT_Crew") == true) -- Studio tests open it at once
+end
+local function cratePrice(st: State): number
+	return Crew.price(factoryPerMinute(st) * baseMultiplier(st), baseMultiplier(st), Config.Crew.crate)
 end
 
 local function goalStats(st: State): Goals.Stats
@@ -308,6 +344,13 @@ local function publish(player: Player)
 	player:SetAttribute("RareGold", st.data.rares.Gold or 0)
 	player:SetAttribute("RareRainbow", st.data.rares.Rainbow or 0)
 	player:SetAttribute("Likes", st.data.likes)
+	player:SetAttribute("CrewUnlocked", crewUnlocked(st))
+	player:SetAttribute("CratePrice", cratePrice(st))
+	local crewIncome, crewRare = crewBoost(st)
+	player:SetAttribute("CrewIncome", math.floor((crewIncome - 1) * 100 + 0.5)) -- percent
+	player:SetAttribute("CrewRare", crewRare)
+	player:SetAttribute("CrewOwned", HttpService:JSONEncode(st.data.crew))
+	player:SetAttribute("CrewWorking", table.concat(crewWorking(st), ","))
 	player:SetAttribute("SfxOn", st.data.settings.sfx ~= false)
 	for name in Config.Passes do
 		player:SetAttribute("Owns" .. name, st.passes[name] == true)
@@ -378,7 +421,8 @@ local function spawnPress(player: Player, item)
 			drop.Material = look[3]
 			drop.CFrame = at(plot, item.x, 4.6, 0)
 			-- now and then a rare one (Studio tests can ask for one with PLT_ForceRare)
-			local rare, rareMult = Rarity.roll(rng:NextNumber(), liveEvent and liveEvent.rareMult or 1, Config.RareParts)
+			local _, crewRare = crewBoost(st)
+			local rare, rareMult = Rarity.roll(rng:NextNumber(), (liveEvent and liveEvent.rareMult or 1) * crewRare, Config.RareParts)
 			local forced = RunService:IsStudio() and workspace:GetAttribute("PLT_ForceRare")
 			if forced then
 				for _, tier in Config.RareParts do
@@ -538,6 +582,38 @@ local function refreshShelf(plot, st: State)
 	end
 end
 
+-- the working crew stand round the show car, each with their name in their rarity's colour
+local CREW_SPOTS = { Vector3.new(-9.5, 0, 15), Vector3.new(2, 0, 10), Vector3.new(13, 0, 15) }
+local MEMBER_BY_KEY = {}
+for i, member in Config.Crew.members do
+	MEMBER_BY_KEY[member.key] = i
+end
+local function rgb(c: { number }): Color3
+	return Color3.fromRGB(c[1], c[2], c[3])
+end
+local function refreshCrew(plot, st: State)
+	local old = plot.items:FindFirstChild("Crew")
+	if old then
+		old:Destroy()
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "Crew"
+	local car = at(plot, 2, 0, 15).Position
+	for i, key in crewWorking(st) do
+		local index = MEMBER_BY_KEY[key]
+		local spot = CREW_SPOTS[i]
+		if index and spot then
+			local member = Config.Crew.members[index]
+			local colour = rgb(Config.Crew.rarities[member.rarity].colour)
+			local from = at(plot, spot.X, 0, spot.Z).Position
+			local head = Scenery.crewMember(folder, CFrame.lookAt(from, Vector3.new(car.X, from.Y, car.Z)), plot.team.colour,
+				colour, member.prop, index + i)
+			label(head, member.name, 1.6, Vector2.new(6, 1)).TextColor3 = colour
+		end
+	end
+	folder.Parent = plot.items
+end
+
 -- the name board: the team's name and its likes
 local function refreshSign(plot, st: State?)
 	local owner = plot.owner
@@ -556,6 +632,7 @@ local function rebuildPlot(player: Player)
 	refreshGarage(plot, st)
 	plot.items:ClearAllChildren()
 	refreshShelf(plot, st)
+	refreshCrew(plot, st)
 	plot.drops:ClearAllChildren()
 	plot.pressLabels = {}
 	local car = Scenery.car(plot.items, at(plot, 2, 0, 15) * CFrame.Angles(0, math.rad(90), 0), plot.team.colour, st.data.season,
@@ -610,6 +687,10 @@ local function tryBuy(player: Player, index: number)
 	if piece then
 		task.delay(1.8, function() -- after the "Bought" message
 			notify:FireClient(player, "Your garage grows: " .. piece.label)
+		end)
+	elseif st.data.season == 0 and next(st.data.crew) == nil and purchasesOf(st) == Config.Crew.unlockPurchases then
+		task.delay(1.8, function()
+			notify:FireClient(player, "Crew crates are open: hire your pit crew!")
 		end)
 	end
 	checkGoals(player)
@@ -1161,6 +1242,46 @@ redeem.OnServerInvoke = function(player, text)
 	return "Code " .. code .. ": +" .. money(reward)
 end
 
+-- a crew crate: pay, hire one member at random, and the best of the crew go to work
+openCrate.OnServerInvoke = function(player)
+	local st = states[player]
+	if not st or not st.plot then
+		return nil, "Try again in a moment"
+	elseif not crewUnlocked(st) then
+		return nil, ("Buy %d machines to hire a crew"):format(Config.Crew.unlockPurchases)
+	elseif os.clock() - st.lastCrate < 0.8 then
+		return nil, "One crate at a time"
+	end
+	local price = cratePrice(st)
+	if st.data.cash < price then
+		return nil, "A crate costs " .. money(price)
+	end
+	st.lastCrate = os.clock()
+	st.data.cash -= price
+	local member = Crew.roll(rng:NextNumber(), rng:NextNumber(), Config.Crew.members, Config.Crew.rarities)
+	st.data.crew[member.key] = (st.data.crew[member.key] or 0) + 1
+	st.dirty = true
+	Analytics.spent(player, price, st.data.cash, Enum.AnalyticsEconomyTransactionType.Shop, "CrewCrate")
+	refreshCrew(st.plot, st)
+	publish(player)
+	effect:FireClient(player, "hired", member.key)
+	if member.rarity == #Config.Crew.rarities then -- the whole server hears about a Legendary
+		notify:FireAllClients(("%s hired a LEGENDARY %s!"):format(st.plot.team.name, member.name))
+	end
+	return member.key
+end
+-- Studio tests: PLT_Crew opens the crew at once and gives each player cash for ten crates
+if RunService:IsStudio() then
+	workspace:GetAttributeChangedSignal("PLT_Crew"):Connect(function()
+		for player, st in states do
+			if workspace:GetAttribute("PLT_Crew") == true then
+				st.data.cash = math.max(st.data.cash, cratePrice(st) * 10)
+			end
+			publish(player)
+		end
+	end)
+end
+
 -- joining and leaving ---------------------------------------------------------------
 local function assignPlot(player: Player)
 	for _, plot in plots do
@@ -1195,7 +1316,7 @@ local function onPlayerAdded(player: Player)
 	local st: State = {
 		data = data, plot = nil, pending = 0, canSave = canSave, passes = {}, dirty = false, friends = 0,
 		leaving = false, released = false, unlogged = 0,
-		giftAt = workspace:GetServerTimeNow() + Config.Gift.everyMinutes * 60, lastRedeem = 0,
+		giftAt = workspace:GetServerTimeNow() + Config.Gift.everyMinutes * 60, lastRedeem = 0, lastCrate = 0,
 	}
 	states[player] = st
 	checkPasses(player, st)
@@ -1214,6 +1335,7 @@ local function onPlayerAdded(player: Player)
 	refreshSign(st.plot, st)
 	if PHOTO_MODE then
 		st.data.rares = { Gold = 9, Rainbow = 2 } -- something in the collection case for its picture
+		st.data.crew = { principal = 1, aero = 1, lollipop = 1 } -- and a crew round the car (no luck boost: the photo run checks income)
 		-- a finished garage in the night look on a free plot next door, for its picture
 		for _, plot in plots do
 			if not plot.owner then

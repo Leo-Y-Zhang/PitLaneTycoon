@@ -254,6 +254,13 @@ local function photoShoot()
 		print(TAG, "SHOT shelf")
 		task.wait(2.5)
 	end
+	if plot.Items:FindFirstChild("Crew") then -- the pit crew round the car, from the back wall
+		cam.CameraType = Enum.CameraType.Scriptable
+		cam.CFrame = CFrame.lookAt((base * CFrame.new(2, 7.5, 24)).Position, (base * CFrame.new(2, 2.5, 10)).Position)
+		task.wait(1.5)
+		print(TAG, "SHOT crew")
+		task.wait(2.5)
+	end
 	for _, model in workspace.Plots:GetChildren() do -- the night look, built next door in photo mode
 		if model:GetAttribute("Theme") == "night" then
 			local nb = (model:FindFirstChild("Base") :: BasePart).CFrame
@@ -547,6 +554,44 @@ if RunService:IsClient() then
 		clientCheck("a wrong code is turned down", wrong == "That code doesn't work", wrong)
 		clientCheck("players can't read the codes",
 			game:GetService("ReplicatedStorage"):FindFirstChild("Codes", true) == nil and (Config :: any).Codes == nil)
+
+		-- the pit crew, once the server half opens the crates (PLT_Crew) and pays for ten
+		local unlocked = waitFor(function()
+			return player:GetAttribute("CrewUnlocked") == true
+		end, 120)
+		task.wait(2) -- the server half notes the cash before the first crate
+		local crewButton = hud:FindFirstChild("CrewButton", true)
+		clientCheck("a Crew button appears once crates open", unlocked and crewButton and crewButton.Visible)
+		local openCrate = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("OpenCrate")
+		local known = {}
+		for _, member in Config.Crew.members do
+			known[member.key] = true
+		end
+		local hired, allKnown = {}, true
+		for _ = 1, 3 do
+			local key, why = openCrate:InvokeServer()
+			table.insert(hired, tostring(key or why))
+			allKnown = allKnown and known[key] == true
+			task.wait(0.9)
+		end
+		clientCheck("each crate hires a crew member", allKnown, table.concat(hired, ","))
+		openCrate:InvokeServer()
+		local again, why = openCrate:InvokeServer()
+		clientCheck("crates open one at a time", again == nil and why == "One crate at a time", why)
+		local panel = hud:FindFirstChild("CrewPanel")
+		local cardCount, hiredShown = 0, 0
+		for _, card in (panel and panel.Cards:GetChildren() or {}) do
+			if card:IsA("Frame") then
+				cardCount += 1
+				hiredShown += string.match(card.Count.Text, "^x%d") and 1 or 0
+			end
+		end
+		clientCheck("the crew panel shows every member, hired or not", cardCount == #Config.Crew.members, cardCount)
+		clientCheck("hired members show as hired", hiredShown >= 1, hiredShown)
+		clientCheck("the crate odds are on show", panel and string.find(panel.Odds.Text, "Legendary 2%", 1, true), panel and panel.Odds.Text)
+		if panel then
+			panel.Visible = true -- in the screenshot
+		end
 	end)
 	return
 end
@@ -953,6 +998,43 @@ local function run()
 	end, 10), player:GetAttribute("RareGold"))
 	local likePrompt = plot:FindFirstChild("Sign") and plot.Sign:FindFirstChild("Like")
 	check("other teams can like the garage at its sign", likePrompt and likePrompt:IsA("ProximityPrompt"))
+
+	-- the pit crew: closed after one purchase; the test opens it (PLT_Crew, which also pays for
+	-- ten crates) and the client half hires four
+	check("the crew stays closed until a few machines are bought", player:GetAttribute("CrewUnlocked") == false,
+		player:GetAttribute("CrewUnlocked"))
+	local incomeBeforeCrew = player:GetAttribute("IncomePerMin") or 0
+	workspace:SetAttribute("PLT_Crew", true)
+	check("then crew crates open", waitFor(function()
+		return player:GetAttribute("CrewUnlocked") == true
+	end, 5))
+	local price = player:GetAttribute("CratePrice") or 0
+	local cashBeforeCrew = cash.Value
+	check("a crate costs at least the floor", price >= 300, price)
+	local function hiredCount(): number
+		local ok, owned = pcall(function()
+			return HttpService:JSONDecode(player:GetAttribute("CrewOwned") or "{}")
+		end)
+		local n = 0
+		for _, count in (ok and owned or {}) do
+			n += count
+		end
+		return n
+	end
+	check("the client hires four crew members", waitFor(function()
+		return hiredCount() >= 4
+	end, 90), hiredCount())
+	task.wait(1)
+	check("each crate costs the same, however good the crew", cash.Value == cashBeforeCrew - hiredCount() * price
+		and player:GetAttribute("CratePrice") == price, ("%d -> %d, %d crates at %d"):format(cashBeforeCrew, cash.Value, hiredCount(), price))
+	local figures = plot.Items:FindFirstChild("Crew")
+	check("the best three stand round the car", figures and #figures:GetChildren() == 3
+		and #string.split(player:GetAttribute("CrewWorking") or "", ",") == 3, figures and #figures:GetChildren())
+	local boost = player:GetAttribute("CrewIncome") or 0
+	local expected = incomeBeforeCrew * (1 + boost / 100)
+	check("the crew adds its boost to income", boost >= 15 and math.abs((player:GetAttribute("IncomePerMin") or 0) - expected) <= 2,
+		("%d -> %d at +%d%%"):format(incomeBeforeCrew, player:GetAttribute("IncomePerMin") or 0, boost))
+	workspace:SetAttribute("PLT_Crew", nil)
 
 	-- leave the character somewhere visible for a screenshot
 	character:PivotTo(base.CFrame * CFrame.new(-8, 4, -14) * CFrame.Angles(0, math.rad(200), 0))

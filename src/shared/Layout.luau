@@ -9,7 +9,7 @@ Layout.TopBarWidth = 360
 -- (measured in Studio on 25 Oct 2026)
 Layout.PlayerListWidth = 330
 Layout.SettingsWidth = 56 -- the settings button, top left
-Layout.ButtonBarHeight = 152 -- Shop, Race and New season, left edge
+Layout.ButtonBarHeight = 206 -- Shop, Race, Crew and New season, left edge
 Layout.ButtonBarCentre = 0.42 -- of the screen's height
 
 -- every panel is laid out for a laptop and shrinks on a phone held sideways

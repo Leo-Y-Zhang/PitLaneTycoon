@@ -1,8 +1,10 @@
 -- Pit Lane Tycoon HUD: cash and income, the next purchase, the shop (and redeem codes), the
--- race and new-season buttons, the current goal and the gift for staying, toasts, and the
--- guide line, sparks and "+$" pop-ups that show where to go next.
+-- race, crew and new-season buttons, the pit crew and its crates, the current goal and the
+-- gift for staying, toasts, and the guide line, sparks and "+$" pop-ups that show where to go
+-- next.
 
 local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local MarketplaceService = game:GetService("MarketplaceService")
 local TweenService = game:GetService("TweenService")
@@ -202,7 +204,7 @@ remotes:WaitForChild("Notify").OnClientEvent:Connect(showToast)
 -- buttons ---------------------------------------------------------------------------
 -- left edge, above the middle: clear of a phone's thumbstick (bottom left) and jump button
 local bar = new("Frame", {
-	AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.42, 0), Size = UDim2.fromOffset(150, 152),
+	AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.42, 0), Size = UDim2.fromOffset(150, Layout.ButtonBarHeight),
 	BackgroundTransparency = 1,
 }, gui)
 new("UIListLayout", { FillDirection = Enum.FillDirection.Vertical, Padding = UDim.new(0, 10) }, bar)
@@ -219,6 +221,9 @@ for col = 0, 2 do
 		}, raceButton)
 	end
 end
+local crewButton = button("Crew", Color3.fromRGB(120, 60, 200), bar)
+crewButton.Name = "CrewButton"
+crewButton.Visible = false -- until the crew unlocks
 local seasonButton = button("New season", Color3.fromRGB(200, 150, 20), bar)
 seasonButton.Visible = false
 -- the time trial: into your car on the grid, or back out to the garage. Once the Reverse GP
@@ -336,6 +341,197 @@ shopButton.Activated:Connect(function()
 end)
 close.Activated:Connect(function()
 	shop.Visible = false
+end)
+
+-- pit crew: every member as a card (the ones not hired yet greyed out), the odds, and crates
+local PURPLE = Color3.fromRGB(120, 60, 200)
+local crewPanel = new("Frame", {
+	Name = "CrewPanel", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(440, 440), BackgroundColor3 = PANEL, Visible = false,
+}, gui)
+round(crewPanel, 14)
+scaled(crewPanel)
+new("UIStroke", { Color = PURPLE, Thickness = 2 }, crewPanel)
+new("TextLabel", {
+	Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextSize = 22,
+	TextColor3 = INK, Text = "Pit crew",
+}, crewPanel)
+local crewSummary = new("TextLabel", {
+	Name = "Summary", Position = UDim2.fromOffset(14, 40), Size = UDim2.new(1, -28, 0, 20), BackgroundTransparency = 1,
+	Font = Enum.Font.GothamMedium, TextSize = 14, TextColor3 = Color3.fromRGB(200, 204, 212), TextWrapped = true,
+}, crewPanel)
+local cards = new("ScrollingFrame", {
+	Name = "Cards", Position = UDim2.fromOffset(14, 68), Size = UDim2.new(1, -28, 1, -170), BackgroundTransparency = 1,
+	ScrollBarThickness = 6, AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new(),
+}, crewPanel)
+new("UIGridLayout", { CellSize = UDim2.fromOffset(128, 84), CellPadding = UDim2.fromOffset(8, 8) }, cards)
+local oddsParts = {}
+for _, r in Config.Crew.rarities do
+	table.insert(oddsParts, ("%s %g%%"):format(r.name, r.chance * 100))
+end
+new("TextLabel", {
+	Name = "Odds", Position = UDim2.new(0, 14, 1, -98), Size = UDim2.new(1, -28, 0, 18), BackgroundTransparency = 1,
+	Font = Enum.Font.Gotham, TextSize = 13, TextColor3 = Color3.fromRGB(150, 156, 166),
+	Text = "Crate odds: " .. table.concat(oddsParts, "  ·  "),
+}, crewPanel)
+local hire = button("Open crate", GREEN, crewPanel)
+hire.Name = "OpenCrate"
+hire.Size = UDim2.new(1, -182, 0, 48)
+hire.Position = UDim2.new(0, 14, 1, -66)
+local crewClose = button("Close", Color3.fromRGB(60, 64, 70), crewPanel)
+crewClose.Size = UDim2.fromOffset(140, 48)
+crewClose.Position = UDim2.new(1, -154, 1, -66)
+
+local function rarityColour(member): Color3
+	local c = Config.Crew.rarities[member.rarity].colour
+	return Color3.fromRGB(c[1], c[2], c[3])
+end
+local function boostText(member): string
+	local parts = {}
+	if member.income > 0 then
+		table.insert(parts, ("+%d%% income"):format(math.floor(member.income * 100 + 0.5)))
+	end
+	if (member.rare or 1) > 1 then
+		table.insert(parts, ("rare parts x%g"):format(member.rare))
+	end
+	return table.concat(parts, ", ")
+end
+local cardOf = {}
+for i, member in Config.Crew.members do
+	local card = new("Frame", { Name = member.key, LayoutOrder = i, BackgroundColor3 = Color3.fromRGB(32, 36, 42) }, cards)
+	round(card, 10)
+	new("Frame", { Size = UDim2.new(1, 0, 0, 6), BorderSizePixel = 0, BackgroundColor3 = rarityColour(member) }, card)
+	local name = new("TextLabel", {
+		Name = "Name", Position = UDim2.fromOffset(8, 10), Size = UDim2.new(1, -16, 0, 20), BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = INK, TextXAlignment = Enum.TextXAlignment.Left,
+		TextScaled = false, Text = member.name,
+	}, card)
+	new("TextLabel", {
+		Position = UDim2.fromOffset(8, 30), Size = UDim2.new(1, -16, 0, 16), BackgroundTransparency = 1, Font = Enum.Font.Gotham,
+		TextSize = 12, TextColor3 = rarityColour(member), TextXAlignment = Enum.TextXAlignment.Left,
+		Text = Config.Crew.rarities[member.rarity].name,
+	}, card)
+	new("TextLabel", {
+		Position = UDim2.fromOffset(8, 46), Size = UDim2.new(1, -16, 0, 16), BackgroundTransparency = 1, Font = Enum.Font.Gotham,
+		TextSize = 12, TextColor3 = Color3.fromRGB(200, 204, 212), TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = true, Text = boostText(member),
+	}, card)
+	local count = new("TextLabel", {
+		Name = "Count", Position = UDim2.fromOffset(8, 62), Size = UDim2.new(1, -16, 0, 16), BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = GREEN, TextXAlignment = Enum.TextXAlignment.Left,
+	}, card)
+	cardOf[member.key] = { card = card, name = name, count = count }
+end
+
+-- the crate opens: names flick past, then the one hired lands in its rarity's colour
+local reveal = new("Frame", {
+	Name = "Reveal", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -20), Size = UDim2.fromOffset(300, 132),
+	BackgroundColor3 = Color3.fromRGB(24, 27, 32), Visible = false, ZIndex = 5,
+}, crewPanel)
+round(reveal, 14)
+local revealStroke = new("UIStroke", { Color = PURPLE, Thickness = 3 }, reveal)
+local revealScale = new("UIScale", {}, reveal)
+local revealTier = new("TextLabel", {
+	Position = UDim2.fromOffset(0, 14), Size = UDim2.new(1, 0, 0, 22), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack,
+	TextSize = 18, TextColor3 = INK, ZIndex = 6,
+}, reveal)
+local revealName = new("TextLabel", {
+	Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack,
+	TextSize = 28, TextColor3 = INK, ZIndex = 6,
+}, reveal)
+local revealBoost = new("TextLabel", {
+	Position = UDim2.fromOffset(0, 88), Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1, Font = Enum.Font.GothamMedium,
+	TextSize = 16, TextColor3 = Color3.fromRGB(200, 204, 212), ZIndex = 6,
+}, reveal)
+local revealToken = 0
+local function showReveal(key: string)
+	revealToken += 1
+	local token = revealToken
+	local members = Config.Crew.members
+	reveal.Visible = true
+	revealBoost.Text = ""
+	revealTier.Text = "Hiring..."
+	revealTier.TextColor3 = INK
+	revealStroke.Color = PURPLE
+	for i = 1, 10 do
+		local m = members[math.random(1, #members)]
+		revealName.Text = m.name
+		revealName.TextColor3 = rarityColour(m)
+		task.wait(0.04 + i * 0.012)
+		if token ~= revealToken then return end
+	end
+	for _, m in members do
+		if m.key == key then
+			local colour = rarityColour(m)
+			revealTier.Text = string.upper(Config.Crew.rarities[m.rarity].name)
+			revealTier.TextColor3 = colour
+			revealName.Text = m.name
+			revealName.TextColor3 = colour
+			revealBoost.Text = boostText(m)
+			revealStroke.Color = colour
+		end
+	end
+	revealScale.Scale = 0.6
+	TweenService:Create(revealScale, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	task.wait(1.8)
+	if token == revealToken then
+		reveal.Visible = false
+	end
+end
+
+local function refreshCrew()
+	crewButton.Visible = player:GetAttribute("CrewUnlocked") == true
+	hire.Text = "Open crate  " .. money(player:GetAttribute("CratePrice") or 0)
+	local ok, owned = pcall(function()
+		return HttpService:JSONDecode(player:GetAttribute("CrewOwned") or "{}")
+	end)
+	owned = ok and type(owned) == "table" and owned or {}
+	local working = {}
+	for _, key in string.split(player:GetAttribute("CrewWorking") or "", ",") do
+		if key ~= "" then
+			working[key] = (working[key] or 0) + 1
+		end
+	end
+	for key, c in cardOf do
+		local n = owned[key] or 0
+		c.card.BackgroundTransparency = n > 0 and 0 or 0.55
+		c.name.TextColor3 = n > 0 and INK or Color3.fromRGB(130, 136, 146)
+		if n == 0 then
+			c.count.Text = "Not hired yet"
+			c.count.TextColor3 = Color3.fromRGB(130, 136, 146)
+		else
+			c.count.Text = ("x%d%s"):format(n, working[key] and ("  ·  %d in the garage"):format(working[key]) or "")
+			c.count.TextColor3 = working[key] and GREEN or Color3.fromRGB(200, 204, 212)
+		end
+	end
+	local income, rare = player:GetAttribute("CrewIncome") or 0, player:GetAttribute("CrewRare") or 1
+	crewSummary.Text = ("Your best %d work in the garage: +%d%% income%s"):format(Config.Crew.slots, income,
+		rare > 1 and (", rare parts x%g"):format(rare) or "")
+end
+
+local hiring = false
+hire.Activated:Connect(function()
+	if hiring then return end
+	hiring = true
+	local ok, key, why = pcall(function()
+		return remotes:WaitForChild("OpenCrate"):InvokeServer()
+	end)
+	hiring = false
+	if ok and key then
+		showReveal(key) -- a quicker crate cuts this one's reveal short
+	else
+		showToast(ok and tostring(why) or "Try again in a moment")
+	end
+end)
+crewButton.Activated:Connect(function()
+	crewPanel.Visible = not crewPanel.Visible
+	shop.Visible = false
+end)
+shopButton.Activated:Connect(function()
+	crewPanel.Visible = false
+end)
+crewClose.Activated:Connect(function()
+	crewPanel.Visible = false
 end)
 
 -- new season ------------------------------------------------------------------------
@@ -609,6 +805,7 @@ local function refreshAll()
 	raceButton.Text = player:GetAttribute("Driving") == true and "Leave car" or "Race"
 	refreshGoal()
 	refreshGift()
+	refreshCrew()
 	welcome.Visible = player:GetAttribute("Welcome") == true
 	hideOwnLike()
 end
