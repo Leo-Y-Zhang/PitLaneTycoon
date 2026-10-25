@@ -97,6 +97,11 @@ do
 	check("no turning on the spot", still == 0, still)
 	check("steering right turns right (negative about the vertical)", right == -h.turnRate, right)
 	check("reversing steers the other way", backRight > 0, backRight)
+	-- a car at rest never measures exactly 0: a held pedal must pull away whichever way it creeps
+	local backAway = DriveModel.step(0.004, -1, 0, 1 / 60, top, false, h)
+	local pullAway = DriveModel.step(-0.004, 1, 0, 1 / 60, top, false, h)
+	check("creeping forward at a standstill, the brake still reverses", backAway < 0, backAway)
+	check("creeping back at a standstill, the throttle still pulls away", pullAway > 0, pullAway)
 end
 
 do -- the start lights
