@@ -99,6 +99,10 @@ before applying.
   event for everyone at once: Safety car (every part pays double for 90 s) or Gold rush (rare
   parts five times as likely for 2 min), on a chequered strip under the top bar. Rare parts add
   about 11% to income on average; `tests/Rarity.spec.luau` keeps it between 5 and 15%.
+- **A collection case and garage likes (25 Oct 2026):** every Gold and Rainbow part a team
+  collects goes into a glass case at the back of its garage (kept across seasons), so rare luck
+  stays on show. Other players can like a garage at its sign once a day; the team gets a minute
+  of income and a heart count on its sign, which gives players a reason to visit each other.
 - **A welcome card (25 Oct 2026):** a first visit opens with three lines on how the game works
   (the conveyor earns, bank on the blue pad and buy on the red, Race any time) until the player
   presses Let's go or buys their first machine. The guide line, the Next bar and the first goal
