@@ -9,6 +9,7 @@ Layout.TopBarWidth = 360
 -- (measured in Studio on 25 Oct 2026)
 Layout.PlayerListWidth = 330
 Layout.SettingsWidth = 56 -- the settings button, top left
+Layout.PanelMargin = 8 -- the least gap between a panel and the left edge of the screen
 Layout.ButtonBarHeight = 206 -- Shop, Race, Crew and New season, left edge
 Layout.ButtonBarCentre = 0.42 -- of the screen's height
 
@@ -35,9 +36,21 @@ function Layout.topBar(width: number, height: number, touch: boolean): (number, 
 	return centre, s
 end
 
--- MUTANT (replaced before merge): today's behaviour, always centred
+-- a panel that opens in the middle of the screen (the shop, the crew), `panelWidth` px wide
+-- on a laptop: its centre in pixels from the left, and its scale. Like the top bar, on a
+-- computer it slides left in a narrow window (and shrinks if it must) to keep clear of the
+-- player list; phones hide the list, so there it stays centred.
 function Layout.panel(width: number, height: number, panelWidth: number, touch: boolean): (number, number)
-	return width / 2, Layout.scale(width, height)
+	local s = Layout.scale(width, height)
+	if touch then
+		return width / 2, s
+	end
+	local left, right = Layout.PanelMargin, width - Layout.PlayerListWidth
+	if right - left < panelWidth * s then
+		s = math.max(0.5, (right - left) / panelWidth)
+	end
+	local half = panelWidth / 2 * s
+	return math.clamp(width / 2, left + half, math.max(left + half, right - half)), s
 end
 
 -- the bottom of the left-edge buttons, in pixels from the top
