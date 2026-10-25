@@ -14,7 +14,7 @@ Analytics.Step = { joined = 1, firstPurchase = 2, trophy = 6, newSeason = 7 }
 
 local warned = false
 local function try(fn: () -> ())
-	local ok, err = pcall(fn)
+	local ok, err = pcall(fn :: any) -- (any: the type checker drops the error from a () -> ())
 	if not ok and not warned then
 		warned = true -- once per server, not once per call
 		warn("[PitLane] analytics call failed: " .. tostring(err))
