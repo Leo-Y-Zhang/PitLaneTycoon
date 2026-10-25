@@ -85,7 +85,7 @@ player:GetAttributeChangedSignal("SfxOn"):Connect(apply)
 remotes:WaitForChild("Effect").OnClientEvent:Connect(function(kind: string)
 	if kind == "banked" then
 		cash:Play()
-	elseif kind == "bought" then
+	elseif kind == "bought" or kind == "hired" then
 		buy:Play()
 	elseif kind == "built" then
 		build:Play()

@@ -119,6 +119,35 @@ Config.Events = {
 	},
 }
 
+-- Pit crew (src/server/Crew.luau), the way the biggest Roblox games use pets: after
+-- `unlockPurchases` machines a team can open crew crates for cash. Each crate hires one member
+-- (rarity first, then a member of that rarity); the best `slots` members work in the garage,
+-- stand by the car and add their boosts. They stay through new seasons. A crate costs
+-- `minutes` of the factory's income before crew boosts (at least `floor` times the season
+-- multiplier), so it is worth the same at every stage. income = +share of income; rare =
+-- multiplies the rare-part chances. tests/Crew.spec.luau checks the odds and the boosts.
+Config.Crew = {
+	slots = 3,
+	unlockPurchases = 5,
+	crate = { minutes = 5, floor = 300 },
+	rarities = { -- commonest first; colours as RGB
+		{ name = "Common", chance = 0.62, colour = { 190, 196, 204 } },
+		{ name = "Rare", chance = 0.27, colour = { 60, 150, 255 } },
+		{ name = "Epic", chance = 0.09, colour = { 180, 90, 255 } },
+		{ name = "Legendary", chance = 0.02, colour = { 255, 196, 40 } },
+	} :: { { name: string, chance: number, colour: { number } } },
+	members = {
+		{ key = "fitter", name = "Tyre fitter", rarity = 1, income = 0.05, prop = "tyre" },
+		{ key = "mechanic", name = "Mechanic", rarity = 1, income = 0.05, prop = "wrench" },
+		{ key = "lollipop", name = "Lollipop marshal", rarity = 1, income = 0.05, prop = "lollipop" },
+		{ key = "engineer", name = "Race engineer", rarity = 2, income = 0.12, prop = "headset" },
+		{ key = "strategist", name = "Strategist", rarity = 2, income = 0.12, prop = "clipboard" },
+		{ key = "aero", name = "Aero designer", rarity = 3, income = 0.25, prop = "wing" },
+		{ key = "analyst", name = "Data analyst", rarity = 3, income = 0.1, rare = 2, prop = "laptop" },
+		{ key = "principal", name = "Team principal", rarity = 4, income = 0.6, prop = "headset" },
+	} :: { { key: string, name: string, rarity: number, income: number, rare: number?, prop: string } },
+}
+
 -- Garage likes (src/server/Likes.luau): once a day each player may like another team's garage
 -- at its sign; the liked team gets `minutes` of its income (at least `floor` times its multiplier).
 Config.Likes = { minutes = 1, floor = 50 }

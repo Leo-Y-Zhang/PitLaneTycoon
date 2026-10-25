@@ -325,6 +325,74 @@ function Scenery.shelf(parent: Instance, cf: CFrame, gold: number, rainbow: numb
 	return m
 end
 
+local SKIN = { Color3.fromRGB(255, 220, 190), Color3.fromRGB(234, 184, 146), Color3.fromRGB(196, 140, 98),
+	Color3.fromRGB(141, 92, 62), Color3.fromRGB(92, 58, 40) }
+
+-- a crew member standing at cf (feet on the floor, facing cf's look direction) in a race suit
+-- of the team's colour, a chest band of their rarity's colour, a team cap and the kit of their
+-- job. Returns the head, for a name tag.
+function Scenery.crewMember(parent: Instance, cf: CFrame, suit: Color3, band: Color3, prop: string, look: number): Part
+	local m = Instance.new("Model")
+	m.Name = "CrewMember"
+	local function p(x: number, y: number, z: number, sx: number, sy: number, sz: number, c: Color3, mat: Enum.Material?): Part
+		return block(m, cf * CFrame.new(x, y, z), Vector3.new(sx, sy, sz), c, mat)
+	end
+	for _, x in { -0.5, 0.5 } do
+		p(x, 1.3, 0, 0.9, 2.2, 0.9, suit) -- legs
+		p(x, 0.2, -0.1, 0.95, 0.4, 1.15, CARBON) -- boots
+	end
+	p(0, 3.5, 0, 2, 2.2, 1, suit) -- body
+	p(0, 4.1, 0, 2.04, 0.35, 1.04, band, Enum.Material.Neon) -- rarity band
+	p(0, 2.5, 0, 2.04, 0.25, 1.04, CARBON) -- belt
+	for _, x in { -1.4, 1.4 } do
+		p(x, 3.4, 0, 0.75, 2.1, 0.75, suit) -- arms
+		p(x, 2.15, 0, 0.7, 0.45, 0.7, CARBON) -- gloves
+	end
+	local head = p(0, 5.25, 0, 1.25, 1.3, 1.25, SKIN[(look % #SKIN) + 1])
+	p(0, 5.95, 0, 1.35, 0.35, 1.35, suit) -- cap
+	p(0, 5.82, -0.85, 1.1, 0.1, 0.6, suit) -- its peak
+	for _, x in { -0.25, 0.25 } do
+		p(x, 5.35, -0.63, 0.18, 0.18, 0.05, CARBON) -- eyes
+	end
+	if prop == "tyre" then
+		local tyre = p(2.25, 2.4, 0, 0.9, 2.3, 2.3, CARBON)
+		tyre.Shape = Enum.PartType.Cylinder
+		local rim = p(2.3, 2.4, 0, 0.92, 1.2, 1.2, STEEL, Enum.Material.Metal)
+		rim.Shape = Enum.PartType.Cylinder
+	elseif prop == "wrench" then
+		p(1.4, 1.4, -0.3, 0.2, 1.6, 0.4, STEEL, Enum.Material.Metal)
+		p(1.4, 0.55, -0.3, 0.2, 0.4, 0.8, STEEL, Enum.Material.Metal)
+	elseif prop == "lollipop" then
+		p(1.4, 3.6, -0.5, 0.15, 3.4, 0.15, CARBON) -- the pole
+		local board = p(1.4, 5.9, -0.5, 0.15, 1.9, 1.9, Color3.fromRGB(225, 38, 28))
+		board.Shape = Enum.PartType.Cylinder
+		board.CFrame = cf * CFrame.new(1.4, 5.9, -0.5) * CFrame.Angles(0, math.rad(90), 0)
+	elseif prop == "headset" then
+		for _, x in { -0.72, 0.72 } do
+			p(x, 5.3, 0, 0.25, 0.6, 0.6, CARBON) -- ear cups
+		end
+		p(0, 6.18, 0, 1.5, 0.12, 0.25, CARBON) -- band over the cap
+		p(-0.55, 5.0, -0.5, 0.08, 0.08, 0.6, CARBON) -- microphone
+	elseif prop == "clipboard" then
+		p(0.6, 3.2, -0.75, 1.0, 1.3, 0.08, Color3.fromRGB(120, 86, 50))
+		p(0.6, 3.15, -0.8, 0.85, 1.05, 0.02, WHITE)
+	elseif prop == "wing" then
+		p(0, 2.6, -1.0, 3.2, 0.18, 0.9, CARBON) -- a front wing, carried in both hands
+		for _, x in { -1.55, 1.55 } do
+			p(x, 2.85, -1.0, 0.1, 0.5, 0.95, band)
+		end
+	elseif prop == "laptop" then
+		p(0, 2.6, -0.95, 1.4, 0.08, 1.0, Color3.fromRGB(70, 74, 82), Enum.Material.Metal)
+		-- the screen stands at the far edge, lit on the side facing its user
+		local screen = p(0, 3.05, -1.4, 1.4, 0.9, 0.06, Color3.fromRGB(70, 74, 82), Enum.Material.Metal)
+		screen.CFrame = cf * CFrame.new(0, 3.05, -1.4) * CFrame.Angles(math.rad(-15), 0, 0)
+		local glow = p(0, 3.05, -1.36, 1.25, 0.75, 0.02, Color3.fromRGB(60, 230, 120), Enum.Material.Neon)
+		glow.CFrame = cf * CFrame.new(0, 3.05, -1.36) * CFrame.Angles(math.rad(-15), 0, 0)
+	end
+	m.Parent = parent
+	return head
+end
+
 -- a show car built from parts; gold trim from season 2, a gold livery from season 4
 function Scenery.car(parent: Instance, cf: CFrame, colour: Color3, season: number, driver: boolean?): Model
 	local car = Instance.new("Model")
