@@ -102,6 +102,13 @@ do
 	check("the first purchase announces the floor", first and first.name == "Floor", first and first.name)
 end
 
+do
+	local from = Config.NightGarageSeason
+	check("the garage keeps its day look before the night season", GaragePlan.theme(from - 1, from) == "day")
+	check("and takes the night look from it on", GaragePlan.theme(from, from) == "night" and GaragePlan.theme(from + 3, from) == "night")
+	check("the night look comes in a later season, not the first", from >= 1, from)
+end
+
 print(("%d passed, %d failed"):format(passed, failed))
 if failed > 0 then
 	error("garage tests failed")

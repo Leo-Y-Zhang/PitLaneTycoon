@@ -131,31 +131,39 @@ end
 local ORANGE = Color3.fromRGB(255, 120, 20)
 local STEEL = Color3.fromRGB(150, 155, 162)
 local CONCRETE = Color3.fromRGB(196, 200, 206)
+local GRAPHITE = Color3.fromRGB(44, 48, 56)
 
 -- one piece of a team's garage, which goes up as the team buys machines (Config.GaragePieces)
-function Scenery.garagePiece(name: string, parent: Instance, cf: CFrame, team: { name: string, colour: Color3 }): Model
+function Scenery.garagePiece(name: string, parent: Instance, cf: CFrame, team: { name: string, colour: Color3 },
+	theme: string?): Model
 	local m = Instance.new("Model")
 	m.Name = name
+	-- the night look (from a later season): graphite walls, team colours that glow
+	local night = theme == "night"
+	local wall = night and GRAPHITE or WALL
+	local concrete = night and GRAPHITE or CONCRETE
+	local wallMat = night and Enum.Material.Metal or Enum.Material.Concrete
+	local glow = night and Enum.Material.Neon or nil
 	local function p(x: number, y: number, z: number, sx: number, sy: number, sz: number, c: Color3, mat: Enum.Material?): Part
 		return block(m, cf * CFrame.new(x, y, z), Vector3.new(sx, sy, sz), c, mat)
 	end
 	if name == "Floor" then
-		p(0, 0.05, 0, 64, 0.1, 52, Color3.fromRGB(60, 63, 68)) -- matt: a shine mirrored the sky like water
+		p(0, 0.05, 0, 64, 0.1, 52, night and Color3.fromRGB(30, 32, 38) or Color3.fromRGB(60, 63, 68)) -- matt: a shine mirrored the sky like water
 		for _, z in { -6.5, 6.5 } do
-			p(0, 0.11, z, 60, 0.02, 0.5, team.colour) -- painted lane lines
+			p(0, 0.11, z, 60, 0.02, 0.5, team.colour, glow) -- painted lane lines
 		end
-		p(0, 0.06, -25.8, 64, 0.12, 0.4, team.colour)
+		p(0, 0.06, -25.8, 64, 0.12, 0.4, team.colour, glow)
 	elseif name == "BackWall" then
-		p(0, 6, 25.5, 64, 12, 1, WALL, Enum.Material.Concrete).CanCollide = true
+		p(0, 6, 25.5, 64, 12, 1, wall, wallMat).CanCollide = true
 	elseif name == "SideWalls" then
 		for _, x in { -31.5, 31.5 } do
-			p(x, 6, 10, 1, 12, 32, WALL, Enum.Material.Concrete).CanCollide = true
+			p(x, 6, 10, 1, 12, 32, wall, wallMat).CanCollide = true
 		end
 	elseif name == "Livery" then
 		for _, x in { -31.5, 31.5 } do
-			p(x, 10.5, 10, 1.15, 1.2, 32.1, team.colour)
+			p(x, 10.5, 10, 1.15, 1.2, 32.1, team.colour, glow)
 		end
-		p(0, 10.5, 24.9, 62, 1.2, 0.3, team.colour)
+		p(0, 10.5, 24.9, 62, 1.2, 0.3, team.colour, glow)
 		local nameplate = p(0, 7, 24.9, 30, 4.5, 0.2, WALL)
 		nameplate.Transparency = 1
 		sign(nameplate, Enum.NormalId.Front, string.upper(team.name), team.colour)
@@ -182,9 +190,9 @@ function Scenery.garagePiece(name: string, parent: Instance, cf: CFrame, team: {
 		end
 	elseif name == "PitWall" then
 		for _, x in { -22, 22 } do -- either side of the way in
-			local wall = p(x, 0.8, -24.6, 20, 1.6, 0.8, CONCRETE, Enum.Material.Concrete)
+			local wall = p(x, 0.8, -24.6, 20, 1.6, 0.8, concrete, wallMat)
 			wall.CanCollide = true
-			p(x, 1.7, -24.6, 20.1, 0.2, 0.9, team.colour)
+			p(x, 1.7, -24.6, 20.1, 0.2, 0.9, team.colour, glow)
 			for _, dx in { -2.6, 2.6 } do
 				p(x + dx, 2.6, -24.6, 0.2, 2, 0.2, CARBON, Enum.Material.Metal)
 			end
@@ -208,17 +216,18 @@ function Scenery.garagePiece(name: string, parent: Instance, cf: CFrame, team: {
 		p(-27.8, 10.6, 24, 3.2, 2, 0.1, team.colour, Enum.Material.Fabric)
 	elseif name == "UpperDeck" then
 		-- a second storey over the back of the garage: glass front, team band, roof sign
-		p(0, 16.5, 25.5, 64, 7, 1, WALL, Enum.Material.Concrete)
+		p(0, 16.5, 25.5, 64, 7, 1, wall, wallMat)
 		for _, x in { -31.5, 31.5 } do
-			p(x, 16.5, 21.5, 1, 7, 9, WALL, Enum.Material.Concrete)
+			p(x, 16.5, 21.5, 1, 7, 9, wall, wallMat)
 		end
-		local glass = p(0, 16.2, 17.3, 62, 6.4, 0.3, Color3.fromRGB(150, 200, 235), Enum.Material.Glass)
+		local glass = p(0, 16.2, 17.3, 62, 6.4, 0.3, night and Color3.fromRGB(70, 110, 170) or Color3.fromRGB(150, 200, 235),
+			Enum.Material.Glass)
 		glass.Transparency = 0.45
 		for _, x in { -15.5, 0, 15.5 } do
 			p(x, 16.2, 17.2, 0.4, 6.4, 0.4, CARBON, Enum.Material.Metal) -- mullions
 		end
 		p(0, 20.3, 21.5, 65, 0.8, 9.6, CARBON, Enum.Material.Metal)
-		p(0, 19.6, 17, 65, 0.6, 0.3, team.colour)
+		p(0, 19.6, 17, 65, 0.6, 0.3, team.colour, glow)
 		local roofSign = p(0, 22.6, 24, 24, 3.6, 0.4, CARBON, Enum.Material.Metal)
 		sign(roofSign, Enum.NormalId.Front, string.upper(team.name) .. " RACING", team.colour)
 	end
@@ -273,8 +282,31 @@ function Scenery.siteProp(name: string, parent: Instance, cf: CFrame): Model
 	return m
 end
 
+-- a stamping press over the conveyor: four posts, a crosshead in team colours, a hydraulic
+-- cylinder and the die that comes down on each part. cf = the crosshead's centre. Returns the
+-- crosshead (named, the label's anchor) and the die (moved by the stamp).
+function Scenery.press(parent: Instance, cf: CFrame, name: string, colour: Color3): (Part, Part)
+	for _, x in { -1.0, 1.0 } do
+		for _, z in { -3.7, 3.7 } do
+			block(parent, cf * CFrame.new(x, -4.3, z), Vector3.new(0.45, 9.2, 0.45), CARBON, Enum.Material.Metal)
+		end
+	end
+	local head = block(parent, cf, Vector3.new(2.6, 1, 7.9), Color3.fromRGB(70, 74, 82), Enum.Material.Metal)
+	head.Name = name
+	block(parent, cf * CFrame.new(0, 0.62, 0), Vector3.new(2.8, 0.25, 8.2), colour)
+	local cylinder = block(parent, cf * CFrame.new(0, -1.5, 0) * CFrame.Angles(0, 0, math.rad(90)), Vector3.new(2, 1.4, 1.4),
+		Color3.fromRGB(176, 182, 190), Enum.Material.Metal)
+	cylinder.Shape = Enum.PartType.Cylinder
+	local die = block(parent, cf * CFrame.new(0, -2.9, 0), Vector3.new(2.2, 0.7, 2.2), Color3.fromRGB(60, 64, 72), Enum.Material.Metal)
+	die.Name = "Die"
+	for k, z in { -0.75, 0, 0.75 } do -- hazard stripes on the die's face
+		block(parent, cf * CFrame.new(-1.11, -2.9, z), Vector3.new(0.02, 0.5, 0.5), k % 2 == 1 and Color3.fromRGB(250, 205, 40) or CARBON)
+	end
+	return head, die
+end
+
 -- a show car built from parts; gold trim from season 2, a gold livery from season 4
-function Scenery.car(parent: Instance, cf: CFrame, colour: Color3, season: number): Model
+function Scenery.car(parent: Instance, cf: CFrame, colour: Color3, season: number, driver: boolean?): Model
 	local car = Instance.new("Model")
 	car.Name = "ShowCar"
 	local body = season >= 3 and Color3.fromRGB(212, 175, 55) or colour
@@ -308,6 +340,27 @@ function Scenery.car(parent: Instance, cf: CFrame, colour: Color3, season: numbe
 		p(x, 2.3, 4.7, 0.12, 1.5, 1.2, body)
 	end
 	p(0, 2.2, 4.4, 0.25, 1.2, 0.25, CARBON, Enum.Material.Metal)
+	p(0, 0.62, -5.45, 3.9, 0.12, 0.45, body) -- front wing flap
+	p(0, 3.2, 4.95, 3.3, 0.14, 0.45, body) -- rear wing flap
+	local function wedge(x: number, y: number, z: number, sx: number, sy: number, sz: number, c: Color3, turn: number)
+		local w = Instance.new("WedgePart")
+		w.Anchored, w.CanCollide, w.CanTouch = true, false, false
+		w.Size = Vector3.new(sx, sy, sz)
+		w.CFrame = cf * CFrame.new(x, y, z) * CFrame.Angles(0, turn, 0)
+		w.Color = c
+		w.Material = Enum.Material.SmoothPlastic
+		w.Parent = car
+	end
+	for _, x in { -1.45, 1.45 } do
+		wedge(x, 1.0, -1.1, 0.9, 0.85, 0.8, body, 0) -- sidepod noses, sloping into the air
+		p(x * 0.72, 1.0, -0.72, 0.5, 0.55, 0.06, CARBON) -- intakes
+	end
+	wedge(0, 2.05, 4.0, 0.9, 1.2, 1.6, body, math.pi) -- engine cover sloping to the rear
+	if driver then
+		local helmet = p(0, 2.05, -0.75, 0.85, 0.85, 0.85, trim == CARBON and WHITE or trim)
+		helmet.Shape = Enum.PartType.Ball
+		p(0, 2.1, -1.15, 0.6, 0.22, 0.1, CARBON) -- visor
+	end
 	for _, w in { { -3.3, 1.7, 1.0 }, { 3.4, 1.85, 1.3 } } do
 		for _, x in { -1.95, 1.95 } do
 			local wheel = p(x, w[2] / 2, w[1], w[3], w[2], w[2], CARBON)

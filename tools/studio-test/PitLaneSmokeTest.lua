@@ -244,6 +244,17 @@ local function photoShoot()
 		task.wait(2.5)
 		hold:Disconnect()
 	end
+	for _, model in workspace.Plots:GetChildren() do -- the night look, built next door in photo mode
+		if model:GetAttribute("Theme") == "night" then
+			local nb = (model:FindFirstChild("Base") :: BasePart).CFrame
+			cam.CameraType = Enum.CameraType.Scriptable
+			cam.CFrame = CFrame.lookAt((nb * CFrame.new(-24, 20, -54)).Position, (nb * CFrame.new(0, 7, 8)).Position)
+			task.wait(1.5)
+			print(TAG, "SHOT night")
+			task.wait(2.5)
+			break
+		end
+	end
 	print(TAG, "PHOTOS-DONE")
 end
 
@@ -617,6 +628,7 @@ local function run()
 	check("a free plot is a building site", free and has(free, "Scaffold") and has(free, "Fence") and has(free, "Cones")
 		and has(free, "SiteSign") and not has(free, "BackWall"))
 	check("a new team starts on a building site too", has(plot, "Cones") and not has(plot, "Floor"))
+	check("a first-season garage has the day look", plot:GetAttribute("Theme") == "day", plot:GetAttribute("Theme"))
 
 	local ls = waitFor(function()
 		return player:FindFirstChild("leaderstats")
@@ -643,6 +655,15 @@ local function run()
 		return false
 	end, 10))
 	check("first press is built", plot.Items:FindFirstChild("press1"))
+	check("it is a stamping press with a die", plot.Items:FindFirstChild("Die"))
+	check("and makes bolts, not plain cubes", waitFor(function()
+		for _, drop in plot.Drops:GetChildren() do
+			if math.abs((drop :: BasePart).Size.X - 0.9) < 0.01 then
+				return true
+			end
+		end
+		return false
+	end, 6))
 	check("the next purchase is published", player:GetAttribute("NextKey") == "press2"
 		and player:GetAttribute("NextCost") == 60, player:GetAttribute("NextKey"))
 	check("the analytics funnel logs the join", player:GetAttribute("FunnelStep") == 1, player:GetAttribute("FunnelStep"))
