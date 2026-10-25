@@ -140,8 +140,7 @@ function Scenery.garagePiece(name: string, parent: Instance, cf: CFrame, team: {
 		return block(m, cf * CFrame.new(x, y, z), Vector3.new(sx, sy, sz), c, mat)
 	end
 	if name == "Floor" then
-		local floor = p(0, 0.05, 0, 64, 0.1, 52, Color3.fromRGB(36, 40, 46))
-		floor.Reflectance = 0.08
+		p(0, 0.05, 0, 64, 0.1, 52, Color3.fromRGB(60, 63, 68)) -- matt: a shine mirrored the sky like water
 		for _, z in { -6.5, 6.5 } do
 			p(0, 0.11, z, 60, 0.02, 0.5, team.colour) -- painted lane lines
 		end
@@ -201,9 +200,9 @@ function Scenery.garagePiece(name: string, parent: Instance, cf: CFrame, team: {
 				tyre.CFrame = cf * CFrame.new(at.X, 0.5 + k * 0.95, at.Z) * CFrame.Angles(0, 0, math.rad(90))
 			end
 		end
-		p(27.5, 1.3, 12, 2.4, 2.6, 4, team.colour, Enum.Material.Metal) -- tool chest
+		p(-27.5, 1.3, 4, 2.4, 2.6, 4, team.colour, Enum.Material.Metal) -- tool chest, clear of the blue pad
 		for k = 0, 3 do
-			p(26.25, 0.6 + k * 0.55, 12, 0.05, 0.08, 3.6, STEEL, Enum.Material.Metal) -- its drawers
+			p(-26.25, 0.6 + k * 0.55, 4, 0.05, 0.08, 3.6, STEEL, Enum.Material.Metal) -- its drawers
 		end
 		p(-29.5, 6, 24, 0.3, 12, 0.3, STEEL, Enum.Material.Metal) -- flagpole
 		p(-27.8, 10.6, 24, 3.2, 2, 0.1, team.colour, Enum.Material.Fabric)

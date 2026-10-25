@@ -188,7 +188,7 @@ local function photoShoot()
 	cam.CameraType = Enum.CameraType.Scriptable
 	cam.FieldOfView = 55
 	local shots = {
-		{ "hero", base * CFrame.new(-30, 14, -30), base * CFrame.new(0, 2, 6) },
+		{ "hero", base * CFrame.new(-18, 16, -42), base * CFrame.new(2, 2, 6) },
 		{ "car", base * CFrame.new(-12, 6, 4), base * CFrame.new(2.5, 1.4, 15) },
 		{ "line", base * CFrame.new(-22, 6, -12), base * CFrame.new(12, 2.5, 2) },
 		{ "paddock", base * CFrame.new(0, 48, -100), base * CFrame.new(0, 2, -10) },
@@ -213,8 +213,10 @@ local function photoShoot()
 		local x, z = TrackShape.point(track, 0.06)
 		local tx, tz = TrackShape.tangent(track, 0.06)
 		local at = Vector3.new(x, 1.1, z)
+		-- sitting down hands the camera to the car; take it back every frame
 		local hold = RunService.Heartbeat:Connect(function()
 			car:PivotTo(CFrame.lookAt(at, at + Vector3.new(tx, 0, tz)))
+			cam.CameraType = Enum.CameraType.Scriptable
 		end)
 		task.wait(1)
 		hideGuis()
