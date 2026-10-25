@@ -30,6 +30,21 @@ earn nothing until they are discovered, so the plan below is about retention fir
 
 Roblox keeps 30% of each sale. Change prices after a week of data, not before.
 
+## Only you can do these
+
+Everything else is built and tested; these need your account, your ears or other people.
+
+- **Play it yourself in Studio** with a keyboard: drive a few laps (does the handling feel
+  right?), listen to the four music tracks and the sounds (none of them has been heard yet),
+  and turn on Studio's phone emulator (Test > Device) to try the thumbstick.
+- **Publish** under a group (step 2 below), with Max Players 6 and Studio API access on, then
+  play the published game once to check saving across a leave and rejoin.
+- **A full server:** invite five friends into one server for ten minutes. The server held 60
+  physics steps a second with one full garage in Studio (1,492 parts); six full garages and six
+  cars have only been estimated, not seen.
+- **Passes, products and the group** (step 4) and the **Maturity questionnaire**.
+- **Announce the launch code** `PITLANE` in the game description.
+
 ## Launch steps
 
 1. **Before publishing:** play it solo in Studio for a full season; check that saving works
@@ -77,6 +92,10 @@ before applying.
   rewards don't count, so it can't be bought). The game's owner is never shown on it.
 - **Happy hour:** 2x earnings every Saturday and Sunday at 18:00 UTC (19:00 UK summer time,
   18:00 in winter), so players gather at the same time. Mention it in the description.
+- **A welcome card (25 Oct 2026):** a first visit opens with three lines on how the game works
+  (the conveyor earns, bank on the blue pad and buy on the red, Race any time) until the player
+  presses Let's go or buys their first machine. The guide line, the Next bar and the first goal
+  then take over.
 - **Sound and feel (25 Oct 2026):** four APM Music tracks in a shuffled loop; Pro Sound Effects
   clicks, cash registers and a swish as each garage piece rises (all Roblox-licensed, checked
   with `run.py --audio`). A settings button (top left) turns music and sounds on or off, kept
