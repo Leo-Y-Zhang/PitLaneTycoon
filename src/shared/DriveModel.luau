@@ -5,6 +5,8 @@
 
 local DriveModel = {}
 
+DriveModel.Standstill = 0.1 -- studs per second; slower than this is stopped
+
 export type Handling = {
 	accel: number, -- studs/s gained per second at full throttle
 	brake: number, -- studs/s lost per second braking
@@ -20,6 +22,11 @@ export type Handling = {
 function DriveModel.step(speed: number, throttle: number, steer: number, dt: number, top: number, offroad: boolean,
 	h: Handling): (number, number)
 	local cap = if offroad then top * h.offroadShare else top
+	-- the physics never measures a car at rest as exactly 0: below a crawl it counts as
+	-- stopped, or a held brake would 'brake' a creep of +0.004 back to 0 every frame
+	if math.abs(speed) < DriveModel.Standstill then
+		speed = 0
+	end
 	if throttle > 0 then
 		if speed < 0 then
 			speed = math.min(0, speed + h.brake * throttle * dt)
