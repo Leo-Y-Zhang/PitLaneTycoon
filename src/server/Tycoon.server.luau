@@ -12,6 +12,7 @@ local HttpService = game:GetService("HttpService")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Scenery = require(script.Parent:WaitForChild("Scenery"))
 local SaveLock = require(script.Parent:WaitForChild("SaveLock"))
+local Racing = require(script.Parent:WaitForChild("Racing"))
 local Analytics = require(script.Parent:WaitForChild("Analytics"))
 -- this server's name on a save lock (Studio has no JobId)
 local JOB = game.JobId ~= "" and game.JobId or ("studio-" .. HttpService:GenerateGUID(false))
@@ -30,15 +31,14 @@ do
 		warn("[PitLane] DataStore unavailable (publish the place and enable Studio API access): " .. tostring(result))
 	end
 end
-local board = nil -- the earnings leaderboard
-do
+local function ordered(name: string): OrderedDataStore?
 	local ok, result = pcall(function()
-		return DataStoreService:GetOrderedDataStore(Config.LeaderboardName)
+		return DataStoreService:GetOrderedDataStore(name)
 	end)
-	if ok then
-		board = result
-	end
+	return ok and result or nil
 end
+local board = ordered(Config.LeaderboardName) -- the earnings leaderboard
+local lapBoard = ordered(Config.LapBoardName) -- best laps, in milliseconds
 
 -- remotes ---------------------------------------------------------------------------
 local remotes = Instance.new("Folder")
@@ -128,6 +128,7 @@ type Data = {
 	cash: number, bought: { [string]: boolean }, season: number, lastDaily: number, streak: number,
 	receipts: { [string]: boolean }, earned: number, lastSeen: number, offlineRate: number,
 	funnel: number, -- the furthest onboarding-funnel step logged (Analytics)
+	bestLap: number, laps: number, -- time trial: best lap in seconds (0 = none yet), clean laps
 }
 type State = {
 	data: Data, plot: any?, pending: number, canSave: boolean, passes: { [string]: boolean }, dirty: boolean, friends: number,
@@ -139,7 +140,7 @@ local states: { [Player]: State } = {}
 local function freshData(): Data
 	return {
 		cash = 0, bought = {}, season = 0, lastDaily = 0, streak = 0, receipts = {},
-		earned = 0, lastSeen = 0, offlineRate = 0, funnel = 0,
+		earned = 0, lastSeen = 0, offlineRate = 0, funnel = 0, bestLap = 0, laps = 0,
 	}
 end
 
@@ -243,6 +244,7 @@ local function publish(player: Player)
 	player:SetAttribute("NextName", nextItem and nextItem.name or "")
 	player:SetAttribute("NextCost", nextItem and nextItem.cost or 0)
 	player:SetAttribute("Plot", st.plot and st.plot.index or 0)
+	player:SetAttribute("BestLap", st.data.bestLap)
 	for name in Config.Passes do
 		player:SetAttribute("Owns" .. name, st.passes[name] == true)
 	end
@@ -386,7 +388,8 @@ local function rebuildPlot(player: Player)
 	plot.items:ClearAllChildren()
 	plot.drops:ClearAllChildren()
 	plot.pressLabels = {}
-	Scenery.car(plot.items, at(plot, 2, 0, 15) * CFrame.Angles(0, math.rad(90), 0), plot.team.colour, st.data.season)
+	local car = Scenery.car(plot.items, at(plot, 2, 0, 15) * CFrame.Angles(0, math.rad(90), 0), plot.team.colour, st.data.season)
+	Racing.prompt(car, player)
 	plot.conveyor.AssemblyLinearVelocity = plot.cf.RightVector * conveyorSpeed(st)
 	for _, item in Config.Items do
 		if st.data.bought[item.key] then
@@ -518,9 +521,7 @@ spawnPad.Duration = 0 -- no fighting here, so no spawn-protection bubble on arri
 spawnPad.Color = Color3.fromRGB(230, 230, 235)
 spawnPad.CFrame = CFrame.new(0, 0.5, 0)
 spawnPad.Parent = workspace
--- the paddock: one ground plane under the spawn and every garage
-part({ Name = "Paddock", Size = Vector3.new(2 * Config.PlotRadius + 140, 1, 2 * Config.PlotRadius + 140),
-	CFrame = CFrame.new(0, -0.6, 0), Color = Color3.fromRGB(84, 92, 98), Material = Enum.Material.Asphalt, Parent = workspace })
+-- the paddock's ground, grass and the time-trial track come with Racing.start below
 Scenery.paddock(Config.PlotCount, Config.PlotRadius, 26)
 
 -- saving ----------------------------------------------------------------------------
@@ -740,23 +741,24 @@ local function refreshFriends()
 	end
 end
 
--- leaderboard -----------------------------------------------------------------------
-local boardRows: { TextLabel } = {}
-do
-	local boardPart = part({ Name = "Leaderboard", Size = Vector3.new(18, 12, 1), CFrame = CFrame.new(0, 6.5, -14),
+-- leaderboards ----------------------------------------------------------------------
+-- a board at the spawn; face = the side that looks at the spawn
+local function makeBoard(name: string, cf: CFrame, face: Enum.NormalId, heading: string, colour: Color3): { TextLabel }
+	local rows = {}
+	local boardPart = part({ Name = name, Size = Vector3.new(18, 12, 1), CFrame = cf,
 		Color = Color3.fromRGB(17, 20, 24), Material = Enum.Material.SmoothPlastic, Parent = workspace })
 	local gui = Instance.new("SurfaceGui")
-	gui.Face = Enum.NormalId.Back -- faces the spawn
+	gui.Face = face
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = 40
 	gui.Parent = boardPart
 	local title = Instance.new("TextLabel")
 	title.Size = UDim2.new(1, 0, 0, 80)
-	title.BackgroundColor3 = Color3.fromRGB(225, 38, 28)
+	title.BackgroundColor3 = colour
 	title.Font = Enum.Font.GothamBlack
 	title.TextScaled = true
 	title.TextColor3 = Color3.new(1, 1, 1)
-	title.Text = "Top constructors"
+	title.Text = heading
 	title.Parent = gui
 	for i = 1, Config.LeaderboardSize do
 		local row = Instance.new("TextLabel")
@@ -769,23 +771,32 @@ do
 		row.TextColor3 = Color3.fromRGB(245, 246, 248)
 		row.Text = ""
 		row.Parent = gui
-		boardRows[i] = row
+		rows[i] = row
 	end
+	return rows
+end
+local boardRows = makeBoard("Leaderboard", CFrame.new(0, 6.5, -14), Enum.NormalId.Back, "Top constructors",
+	Color3.fromRGB(225, 38, 28))
+local lapRows = makeBoard("LapBoard", CFrame.new(0, 6.5, 14), Enum.NormalId.Front, "Fastest laps",
+	Color3.fromRGB(28, 86, 214))
+
+local function lapTime(seconds: number): string
+	return ("%d:%05.2f"):format(seconds // 60, seconds % 60)
 end
 
 local nameCache: { [number]: string } = {}
-local function refreshBoard()
+local function fillBoard(rows: { TextLabel }, store: OrderedDataStore?, fastestFirst: boolean, show: (number) -> string)
 	local ok, page = false, nil
-	if board then
+	if store then
 		ok, page = pcall(function()
-			return board:GetSortedAsync(false, Config.LeaderboardSize):GetCurrentPage()
+			return store:GetSortedAsync(fastestFirst, Config.LeaderboardSize):GetCurrentPage()
 		end)
 	end
 	if not ok then
-		boardRows[1].Text = "Appears once the game is published"
+		rows[1].Text = "Appears once the game is published"
 		return
 	end
-	for i, row in boardRows do
+	for i, row in rows do
 		local entry = page[i]
 		if entry then
 			local userId = tonumber(string.sub(entry.key, 3)) or 0
@@ -795,11 +806,42 @@ local function refreshBoard()
 				end)
 				nameCache[userId] = okName and name or "Racer"
 			end
-			row.Text = ("%d. %s   %s"):format(i, nameCache[userId], money(entry.value))
+			row.Text = ("%d. %s   %s"):format(i, nameCache[userId], show(entry.value))
 		else
 			row.Text = ""
 		end
 	end
+end
+local function refreshBoard()
+	fillBoard(boardRows, board, false, money)
+	fillBoard(lapRows, lapBoard, true, function(ms)
+		return lapTime(ms / 1000)
+	end)
+end
+
+-- the time trial ----------------------------------------------------------------------
+-- a clean lap pays a little; a new best lap pays more and goes on the board
+local function lapDone(player: Player, seconds: number)
+	local st = states[player]
+	if not st then return end
+	st.data.laps += 1
+	local perMin = incomePerMinute(st)
+	local reward = math.max(Config.Drive.lapRewardFloor * multiplier(st), perMin * Config.Drive.lapRewardMinutes)
+	local best = st.data.bestLap == 0 or seconds < st.data.bestLap
+	if best then
+		st.data.bestLap = seconds
+		reward += perMin * Config.Drive.bestLapMinutes
+		local isOwner = game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
+		if lapBoard and not isOwner then
+			task.spawn(pcall, function()
+				lapBoard:SetAsync("u_" .. player.UserId, math.floor(seconds * 1000))
+			end)
+		end
+	end
+	addCash(player, reward)
+	effect:FireClient(player, "banked", reward)
+	notify:FireClient(player, (best and "New best lap %s! +%s" or "Lap %s  +%s"):format(lapTime(seconds), money(reward)))
+	Analytics.earned(player, reward, st.data.cash, Enum.AnalyticsEconomyTransactionType.Gameplay, "Lap")
 end
 
 -- joining and leaving ---------------------------------------------------------------
@@ -874,6 +916,26 @@ local function onPlayerAdded(player: Player)
 	player.CharacterAdded:Connect(toPlot)
 	if player.Character then toPlot(player.Character) end
 end
+Racing.start({
+	season = function(player: Player)
+		local st = states[player]
+		return st and st.plot and st.data.season or nil
+	end,
+	colour = function(player: Player)
+		local st = states[player]
+		return st and st.plot and st.plot.team.colour or Color3.new(1, 1, 1)
+	end,
+	slot = function(player: Player)
+		local st = states[player]
+		return st and st.plot and st.plot.index or 1
+	end,
+	garage = function(player: Player)
+		local st = states[player]
+		return st and st.plot and at(st.plot, 0, 4, -22) or nil
+	end,
+	lap = lapDone,
+}, remotes)
+
 Players.PlayerAdded:Connect(onPlayerAdded)
 -- anyone who joined while this script was still building the map
 for _, player in Players:GetPlayers() do
