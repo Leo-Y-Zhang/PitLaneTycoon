@@ -53,6 +53,11 @@ Roblox keeps 30% of each sale. Change prices after a week of data, not before.
    before the game keeps players.
 6. **Update weekly:** new machines, a new upgrade, a limited-time event. Update logs in the
    game description bring returning players.
+7. **Read the numbers** on the Creator Dashboard under Analytics, a day or two after the first
+   players. *Funnels > Onboarding* shows how many players reach each step: Joined, First
+   purchase, 5, 10 and 15 purchases, Constructors' trophy, New season. The biggest drop
+   between two steps is the next thing to fix. *Economy* shows cash in (factory, daily streak,
+   offline pay, Robux packs) and out (each machine by its key, new seasons).
 
 ## Getting paid (DevEx)
 
@@ -73,11 +78,19 @@ before applying.
 - **Happy hour:** 2x earnings every Saturday and Sunday at 18:00 UTC (19:00 UK summer time,
   18:00 in winter), so players gather at the same time. Mention it in the description.
 
+## Saving across servers
+
+Saves are session-locked (`src/server/SaveLock.luau`). A server loads a player's save only when
+no live server holds it, and writes it only while it still holds it. A player who hops servers
+waits a few seconds ("Fetching your garage from your last server...") while the old server
+finishes its leaving save, instead of loading an older save that then overwrites the newer
+one. If a server crashes, its lock goes stale after 150 seconds (the server saves every 60)
+and the next server takes the save over. `tests/SaveLock.spec.luau` plays these cases through
+with a fake store; CI runs it on every push.
+
 ## Next features (in order of expected impact)
 
 1. A second plot theme unlocked in season 3 (keeps rebirthing fresh).
-2. Session locking, so a player who hops servers within seconds can't load a save that the old
-   server has not finished writing (rare; matters once there is real traffic).
 
 Done 24 Oct 2026: a longer first season (11 purchases became 24), machines that only appear in
 later seasons, and a HUD built for phones.

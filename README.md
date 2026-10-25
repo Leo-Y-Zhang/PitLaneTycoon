@@ -31,11 +31,13 @@ in [docs/LAUNCH.md](docs/LAUNCH.md).
 | Prices, machines, multipliers, season cost, daily rewards, pass ids | `src/shared/Config.luau` |
 | How long each purchase and season takes | `python tools/balance.py` (reads the config) |
 | The map, the production line, money, saving, purchases | `src/server/Tycoon.server.luau` |
+| Session-locked saves (no lost progress on a server hop) | `src/server/SaveLock.luau` |
+| Funnel and economy events for the Creator Dashboard | `src/server/Analytics.luau` |
 | The on-screen HUD and shop | `src/client/Hud.client.luau` |
 
 Build the place file: `rojo build default.project.json -o PitLaneTycoon.rbxlx`.
 Live-sync while editing: `rojo serve`, with the Rojo plugin connected in Studio.
 
 CI checks that every Luau file compiles and type-checks against the Roblox API, that the place
-file builds, and that the pacing holds: the first season takes 45-90 minutes and no purchase
-more than 8 (`tools/balance.py`).
+file builds, that the pacing holds (the first season takes 45-90 minutes and no purchase
+more than 8, `tools/balance.py`), and runs the save-lock tests (`tests/SaveLock.spec.luau`).

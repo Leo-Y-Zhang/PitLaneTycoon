@@ -16,7 +16,17 @@ sound loads and that banking shows a +$ pop-up. It prints PASS or FAIL for each 
 errors the game logged, then removes the plugin. It never publishes anything. The latest place
 file is a CI artifact (`PitLaneTycoon-place`) on every run.
 
+It also checks that the onboarding funnel logs the join and the first purchase, and that the
+game logged no warnings of its own (a failing save or analytics call warns). Lock the screen
+and Studio draws its viewport 1 px tall: the server checks still hold, but the client layout
+check fails and screenshots come out empty, so run.py says when the screen is locked.
+
 Studio runs on 24 Oct 2026: 19/19 checks passed and the game logged no errors.
+
+Saving across servers can't be played in Studio (an unpublished place has no DataStore), so the
+lock is tested on its own: `luau tests/SaveLock.spec.luau` (CI runs it) plays a server hop, a
+crashed server, a server that comes back after losing its lock, a late save after leaving, a
+failing store and a player who leaves while waiting.
 
 ## By hand
 

@@ -62,6 +62,14 @@ def screenshot(pid: int, path: Path) -> None:
     subprocess.run(["powershell.exe", "-NoProfile", "-Command", script], env=env, check=False)
 
 
+def screen_locked() -> bool:
+    """The lock screen (LogonUI) is up. Studio then draws its viewport 1 px tall, so the
+    client's layout checks fail and screenshots come out empty."""
+    out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq LogonUI.exe", "/NH"],
+                         capture_output=True, text=True, check=False).stdout
+    return "LogonUI.exe" in out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("place", type=Path)
@@ -82,6 +90,10 @@ def main() -> int:
             sys.exit("--photos needs --shots DIR")
         source = source.replace('local SCENARIO = "smoke"', 'local SCENARIO = "photo"', 1)
     PLUGIN.write_text(source, encoding="utf-8")
+    locked = screen_locked()
+    if locked:
+        print("NOTE the screen is locked: the server checks hold, but the client layout checks"
+              " and any screenshots are not meaningful until it is unlocked")
     started = time.time()
     # skip what is already in Studio's logs, or an earlier run's RESULT would be read as this one's
     seen: dict[Path, int] = {log: log.stat().st_size for log in (ROBLOX / "logs").glob("*Studio*.log")}
@@ -124,7 +136,8 @@ def main() -> int:
         print("the play test could not start:", result.get("result"))
         return 2
     r = result["result"]
-    print(f"\n{r['passed']}/{r['total']} checks passed, {client_fails} client checks failed, {r['errors']} errors")
+    print(f"\n{r['passed']}/{r['total']} checks passed, {client_fails} client checks failed, {r['errors']} errors"
+          + (" (screen locked: client checks not meaningful)" if locked else ""))
     return 0 if r["passed"] == r["total"] and not client_fails and not r["errors"] else 1
 
 
