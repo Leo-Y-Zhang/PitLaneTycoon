@@ -71,13 +71,14 @@ def main() -> None:
     shots, out = Path(sys.argv[1]), Path(sys.argv[2])
     out.mkdir(parents=True, exist_ok=True)
     views = {}
-    for name in ("race", "hero", "car", "line", "paddock"):
+    for name in ("race", "hero", "car", "line", "paddock", "night"):
         vp = viewport(Image.open(shots / f"{name}.png"))
         views[name] = vp.crop((0, int(vp.height * 0.17), vp.width, vp.height))  # below the menu buttons
     titled(views["race"], (1280, 720), "PIT LANE TYCOON", "Drive your own F1 car").save(out / "thumbnail-1.png")
     titled(views["hero"], (1280, 720), "PIT LANE TYCOON", "Build your F1 factory").save(out / "thumbnail-2.png")
     titled(views["line"], (1280, 720), "PIT LANE TYCOON", "Every part pays").save(out / "thumbnail-3.png")
     titled(views["paddock"], (1280, 720), "PIT LANE TYCOON", "Six teams. One trophy.").save(out / "thumbnail-4.png")
+    titled(views["night"], (1280, 720), "PIT LANE TYCOON", "A new look in season 3").save(out / "thumbnail-5.png")
     icon = car_icon(views["car"])
     icon.save(out / "icon.png")
     for f in sorted(out.glob("*.png")):

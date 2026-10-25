@@ -58,7 +58,7 @@ Everything else is built and tested; these need your account, your ears or other
    are six garages, and a seventh player would have none.
 3. **Icon and thumbnails** matter more than anything else for clicks: a bright car on a
    conveyor, big readable title, no small text. Ready-made ones are in `marketing/`
-   (`icon.png` 512x512, `thumbnail-1..4.png` 1280x720); upload all four thumbnails so Roblox
+   (`icon.png` 512x512, `thumbnail-1..5.png` 1280x720); upload all five thumbnails so Roblox
    rotates them. They contain no avatar or username. To remake them after a visual change:
    `python tools/studio-test/run.py PitLaneTycoon.rbxlx --photos --shots shots` then
    `python tools/studio-test/thumbnails.py shots marketing`.
@@ -138,7 +138,12 @@ with a fake store; CI runs it on every push.
 
 ## Next features (in order of expected impact)
 
-1. A second plot theme unlocked in season 3 (keeps rebirthing fresh).
+1. A second track layout, or a reversed direction, unlocked in a later season.
+2. Proper 3D models (meshes) for the car and machines; everything is still built from parts.
+
+Done 25 Oct 2026: the night garage from season 3 (graphite walls, team colours that glow),
+stamping presses with a moving die, a different part from each press, a fuller car with a
+helmeted driver in the show car, F1 start lights, engine and tyre sounds, a speed readout.
 
 Done 24 Oct 2026: a longer first season (11 purchases became 24), machines that only appear in
 later seasons, and a HUD built for phones.

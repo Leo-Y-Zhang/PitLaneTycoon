@@ -9,7 +9,8 @@ never had.
 
 The garage builds itself as you go: a free plot is a building site, and every few purchases
 another piece rises out of the floor, from the epoxy floor and walls to floodlights, a pit wall
-and an upper deck with a glass front.
+and an upper deck with a glass front. From the third season it takes a night look: graphite
+walls and team colours that glow.
 
 A goal panel always shows the next thing to aim for (bank, buy, lap, earn, beat a lap time,
 win the trophy, start a season) and pays when it is met; a gift waits every 10 minutes played;
