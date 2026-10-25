@@ -81,6 +81,8 @@ Config.GaragePieces = {
 	{ name = "Kit", label = "Tyres and tools", at = 14 },
 	{ name = "UpperDeck", label = "Upper deck", at = 16 },
 } :: { GaragePiece }
+-- from this season (0 = the first) the garage takes its night look: graphite and neon
+Config.NightGarageSeason = 2
 
 -- Sounds and music, from Roblox-licensed libraries only (APM Music, Pro Sound Effects), so
 -- any experience may play them. `python tools/studio-test/run.py PLACE --audio` checks every

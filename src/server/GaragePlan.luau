@@ -45,4 +45,9 @@ function GaragePlan.newPiece(pieces: { Piece }, purchases: number, season: numbe
 	return nil
 end
 
+-- the garage's look: "day" until the season Config.NightGarageSeason, "night" from then on
+function GaragePlan.theme(season: number, nightFrom: number): string
+	return if season >= nightFrom then "night" else "day"
+end
+
 return GaragePlan

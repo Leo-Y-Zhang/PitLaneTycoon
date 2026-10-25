@@ -336,22 +336,31 @@ local function refreshPads(player: Player)
 	end
 end
 
+-- what each press makes, so the line carries bolts, brackets and power units, not cubes
+local DROP_LOOKS = {
+	press1 = { Vector3.new(0.9, 0.9, 0.9), Color3.fromRGB(190, 195, 205), Enum.Material.Metal }, -- bolt
+	press2 = { Vector3.new(1.4, 0.5, 1.0), Color3.fromRGB(214, 218, 224), Enum.Material.SmoothPlastic }, -- bracket
+	press3 = { Vector3.new(1.8, 0.35, 0.8), Color3.fromRGB(170, 185, 200), Enum.Material.SmoothPlastic }, -- wishbone
+	press4 = { Vector3.new(1.3, 1.1, 1.1), Color3.fromRGB(124, 128, 136), Enum.Material.Metal }, -- gearbox
+	press5 = { Vector3.new(1.7, 0.35, 1.3), Color3.fromRGB(96, 100, 112), Enum.Material.Fabric }, -- carbon panel
+	press6 = { Vector3.new(1.5, 1.0, 1.2), Color3.fromRGB(200, 60, 50), Enum.Material.Metal }, -- power unit
+}
+
 local function spawnPress(player: Player, item)
 	local st = states[player]
 	local plot = st.plot
-	local body = part({
-		Name = item.key, Size = Vector3.new(3, 3, 3), Color = Color3.fromRGB(70, 74, 82),
-		Material = Enum.Material.Metal, CFrame = at(plot, item.x, 7, 0), Parent = plot.items,
-	})
-	part({ Name = "Cap", Size = Vector3.new(3.2, 0.3, 3.2), Color = plot.team.colour,
-		Material = Enum.Material.SmoothPlastic, CFrame = at(plot, item.x, 8.65, 0), Parent = plot.items })
-	plot.pressLabels[item.key] = label(body, item.name, LABEL_HIGH[item.key] and 4 or 2.6, Vector2.new(4.6, 1.2))
+	local body, die = Scenery.press(plot.items, at(plot, item.x, 8.6, 0), item.key, plot.team.colour)
+	plot.pressLabels[item.key] = label(body, item.name, LABEL_HIGH[item.key] and 3.4 or 2, Vector2.new(4.6, 1.2))
+	local look = DROP_LOOKS[item.key] or { Vector3.new(1.2, 1.2, 1.2), Color3.fromRGB(196, 202, 210), Enum.Material.SmoothPlastic }
+	local dieAt = die.CFrame
+	local stamp = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, true)
 	task.spawn(function()
 		while body.Parent and states[player] == st and st.plot == plot do
+			TweenService:Create(die, stamp, { CFrame = dieAt - Vector3.new(0, 0.5, 0) }):Play() -- the die comes down
 			local drop = Instance.new("Part")
-			drop.Size = Vector3.new(1.2, 1.2, 1.2)
-			drop.Color = Color3.fromRGB(196, 202, 210)
-			drop.Material = Enum.Material.SmoothPlastic
+			drop.Size = look[1]
+			drop.Color = look[2]
+			drop.Material = look[3]
 			drop.CFrame = at(plot, item.x, 4.6, 0)
 			drop:SetAttribute("Value", pressValue(st, item))
 			drop.Parent = plot.drops
@@ -405,8 +414,9 @@ local function spawnTune(player: Player, item)
 		end
 		if other == item then break end
 	end
-	part({ Name = item.key, Size = Vector3.new(3.25, 0.3, 3.25), Color = Color3.fromRGB(212, 175, 55),
-		Material = Enum.Material.Metal, CanCollide = false, CFrame = at(plot, press.x :: number, 5.6 + tier * 0.7, 0),
+	-- a gold collar on the press's cylinder for each tune-up
+	part({ Name = item.key, Size = Vector3.new(1.8, 0.3, 1.8), Color = Color3.fromRGB(212, 175, 55),
+		Material = Enum.Material.Metal, CanCollide = false, CFrame = at(plot, press.x :: number, 6.6 + tier * 0.5, 0),
 		Parent = plot.items })
 	local name = plot.pressLabels[item.target]
 	if name then name.Text = item.name end
@@ -445,11 +455,22 @@ end
 -- put the garage's pieces and building-site props in line with the team's progress (st nil =
 -- a free plot, all building site)
 local function refreshGarage(plot, st: State?, animate: boolean?)
-	local up = GaragePlan.built(Config.GaragePieces, st and purchasesOf(st) or 0, st and st.data.season or 0)
+	local season = st and st.data.season or 0
+	local up = GaragePlan.built(Config.GaragePieces, st and purchasesOf(st) or 0, season)
+	local theme = GaragePlan.theme(season, Config.NightGarageSeason)
+	if plot.model:GetAttribute("Theme") ~= theme then -- a new look: rebuild every piece in it
+		plot.model:SetAttribute("Theme", theme)
+		for _, piece in Config.GaragePieces do
+			local old = plot.garage:FindFirstChild(piece.name)
+			if old then
+				old:Destroy()
+			end
+		end
+	end
 	for _, piece in Config.GaragePieces do
 		local have = plot.garage:FindFirstChild(piece.name)
 		if up[piece.name] and not have then
-			local model = Scenery.garagePiece(piece.name, plot.garage, plot.cf, plot.team)
+			local model = Scenery.garagePiece(piece.name, plot.garage, plot.cf, plot.team, theme)
 			if animate then
 				rise(model)
 				if plot.owner then
@@ -477,7 +498,8 @@ local function rebuildPlot(player: Player)
 	plot.items:ClearAllChildren()
 	plot.drops:ClearAllChildren()
 	plot.pressLabels = {}
-	local car = Scenery.car(plot.items, at(plot, 2, 0, 15) * CFrame.Angles(0, math.rad(90), 0), plot.team.colour, st.data.season)
+	local car = Scenery.car(plot.items, at(plot, 2, 0, 15) * CFrame.Angles(0, math.rad(90), 0), plot.team.colour, st.data.season,
+		true)
 	Racing.prompt(car, player)
 	plot.conveyor.AssemblyLinearVelocity = plot.cf.RightVector * conveyorSpeed(st)
 	for _, item in Config.Items do
@@ -1081,6 +1103,17 @@ local function onPlayerAdded(player: Player)
 	end
 	if PHOTO_MODE then
 		st.plot.signLabel.Text = "Your garage"
+		-- a finished garage in the night look on a free plot next door, for its picture
+		for _, plot in plots do
+			if not plot.owner then
+				local all = {}
+				for _, item in Config.Items do
+					all[item.key] = true
+				end
+				refreshGarage(plot, { data = { bought = all, season = Config.NightGarageSeason } } :: any)
+				break
+			end
+		end
 	end
 	rebuildPlot(player)
 	publish(player)
