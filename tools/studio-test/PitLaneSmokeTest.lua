@@ -500,39 +500,29 @@ if RunService:IsClient() then
 		local engineSound = game:GetService("SoundService"):FindFirstChild("PitLane_engine") :: Sound?
 		clientCheck("the engine runs", engineSound and engineSound.IsLoaded and engineSound.IsPlaying)
 
-		-- hold the brake (it reverses) for three seconds, after the controls have written theirs
+		-- hold the brake (it reverses) for three seconds. Through the seat's TestThrottle: Roblox's
+		-- own controls rewrite ThrottleFloat every frame, so a value written there can be lost
 		local speedLabel = frame and frame:FindFirstChild("Speed") :: TextLabel?
-		local fastest = 0 -- the highest reading while reversing
 		local chassis = car.PrimaryPart :: BasePart
 		local driveForce = chassis:FindFirstChild("Drive") :: LinearVelocity?
-		local trace = {} -- DIAG: what the car did, every half second
-		local nextTrace = 0
-		local flips = 0 -- DIAG: how often something else rewrites the throttle
-		local flipWatch = seat:GetPropertyChangedSignal("ThrottleFloat"):Connect(function()
-			flips += 1
-		end)
+		local fastest = 0 -- the highest reading while reversing
+		local trace, nextTrace = {}, 0 -- what the car did every half second, shown on a failure
 		seat:SetAttribute("TestThrottle", -1)
-		local hold = RunService.Stepped:Connect(function()
-			seat.ThrottleFloat = -1
+		local watch = RunService.Heartbeat:Connect(function()
 			local reading = speedLabel and tonumber(string.match(speedLabel.Text, "^(%d+) km/h$"))
 			fastest = math.max(fastest, reading or 0)
-		end)
-		local watch = RunService.Heartbeat:Connect(function()
-			if os.clock() < nextTrace then return end
-			nextTrace = os.clock() + 0.5
-			local v = chassis.AssemblyLinearVelocity
-			local pv = driveForce and driveForce.PlaneVelocity or Vector2.zero
-			table.insert(trace, ("thr=%.1f v=%.2f pv=%.2f drive=%s clock=%s txt=%s seat=%s"):format(seat.ThrottleFloat,
-				v.Magnitude, pv.Magnitude, tostring(driveForce ~= nil and chassis:FindFirstChild("Steer") ~= nil),
-				clockLabel and clockLabel.Text or "?", speedLabel and speedLabel.Text or "?",
-				tostring(humanoid.SeatPart == seat and seat:GetAttribute("RaceCar"))))
+			if os.clock() >= nextTrace then
+				nextTrace = os.clock() + 0.5
+				local pv = driveForce and driveForce.PlaneVelocity or Vector2.zero
+				table.insert(trace, ("v=%.2f force=%.2f clock=%s"):format(chassis.AssemblyLinearVelocity.Magnitude,
+					pv.Magnitude, clockLabel and clockLabel.Text or "?"))
+			end
 		end)
 		task.wait(3)
-		hold:Disconnect()
 		watch:Disconnect()
-		flipWatch:Disconnect()
 		seat:SetAttribute("TestThrottle", nil)
-		clientCheck("the speed shows in km/h", fastest > 10, ("up to %d km/h | flips %d | %s"):format(fastest, flips, table.concat(trace, " ; ")))
+		clientCheck("the speed shows in km/h", fastest > 10, ("up to %d km/h"):format(fastest)
+			.. (if fastest > 10 then "" else " | " .. table.concat(trace, " ; ")))
 
 		local function place(a: number, off: number)
 			local x, z = TrackShape.point(Config.Track, a)
