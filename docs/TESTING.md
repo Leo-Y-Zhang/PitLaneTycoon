@@ -16,6 +16,12 @@ sound loads and that banking shows a +$ pop-up. It prints PASS or FAIL for each 
 errors the game logged, then removes the plugin. It never publishes anything. The latest place
 file is a CI artifact (`PitLaneTycoon-place`) on every run.
 
+Goals: the first goal is to bank cash, banking meets it and shows "Buy 2 machines", two
+machines show "Drive a clean lap", and the lap shows "Buy 5 machines"; the panel shows the
+current goal. The first gift is ten minutes away, its button counts down, and claiming early
+is refused. After the drive, a code typed as " pitlane " pays, pays only once, a wrong code is
+turned down, and the code list is nowhere players can read it.
+
 The garage: a free plot is a building site and so is a new team's; the first purchase lays
 the floor and clears the cones, the second raises the back wall and takes the scaffolding down.
 
@@ -45,7 +51,10 @@ line. Five deliberate bugs (no teleport check, laps counted backwards, no neares
 steering reversed, a track through the garages) each failed it on 25 Oct 2026.
 `luau tests/Garage.spec.luau` checks the garage plan: a free plot is all building site, the
 pieces go up in order and all before the trophy, each site prop is cleared by one piece, and
-a new season keeps the shell.
+a new season keeps the shell. `luau tests/Goals.spec.luau` checks every goal can be met where
+it stands in the chain (purchase goals within a season's line, lap times within reach of that
+season's car), how progress is counted, and that codes are well formed and not in the shared
+Config.
 
 ## By hand
 

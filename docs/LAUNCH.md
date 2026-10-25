@@ -77,6 +77,13 @@ before applying.
   rewards don't count, so it can't be bought). The game's owner is never shown on it.
 - **Happy hour:** 2x earnings every Saturday and Sunday at 18:00 UTC (19:00 UK summer time,
   18:00 in winter), so players gather at the same time. Mention it in the description.
+- **Goals, gifts and codes (25 Oct 2026):** a goal panel shows one goal at a time from a chain
+  of 16 (bank your first cash, buy 2 machines, drive a clean lap, ... start season 4); each
+  pays a few minutes of income, so there is always a next step. A gift can be claimed every 10
+  minutes played (they don't pile up, so players come back to the panel). Codes are typed in
+  the shop and pay once per player; they live in `src/server/Codes.luau`, on the server, so
+  players can't read them. Start with `PITLANE` for the launch and put it in the description;
+  add a new code for each update or milestone (1K likes, 100K visits) and remove old ones.
 - **The garage builds itself (25 Oct 2026):** a free plot is a building site (cones,
   scaffolding, orange fencing, an under-construction sign). Purchases 1, 2, 4, 6, 8, 10, 12, 14
   and 16 each raise a piece: epoxy floor, back wall, side walls, team livery, awning,
