@@ -103,6 +103,15 @@ before applying.
   collects goes into a glass case at the back of its garage (kept across seasons), so rare luck
   stays on show. Other players can like a garage at its sign once a day; the team gets a minute
   of income and a heart count on its sign, which gives players a reason to visit each other.
+- **A pit crew (25 Oct 2026),** the Pit Lane take on the pets in Grow a Garden and Pet
+  Simulator: after 5 machines a team can open crew crates for cash. Each hires one member by
+  rarity (Common 62%, Rare 27%, Epic 9%, Legendary 2%, odds on the panel): tyre fitters,
+  mechanics and lollipop marshals (+5% income), race engineers and strategists (+12%), an aero
+  designer (+25%), a data analyst (rare parts twice as likely) and the team principal (+60%).
+  The best three stand round the show car with the kit of their job and stay through new
+  seasons; a Legendary is announced to the whole server. A crate costs 5 minutes of income
+  before crew boosts, so it never gets dearer as the crew improves. Three principals, the
+  ceiling, make 2.8x income (`tests/Crew.spec.luau` keeps it under 3x).
 - **A welcome card (25 Oct 2026):** a first visit opens with three lines on how the game works
   (the conveyor earns, bank on the blue pad and buy on the red, Race any time) until the player
   presses Let's go or buys their first machine. The guide line, the Next bar and the first goal
