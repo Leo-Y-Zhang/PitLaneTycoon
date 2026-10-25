@@ -176,12 +176,14 @@ Config.DailyRewards = {
 -- Goals, one at a time in this order (src/server/Goals.luau); each pays `minutes` of income
 -- (at least `floor` times the season multiplier) when met. Kinds: banks, purchases (this
 -- season), laps (clean), earned (factory, all seasons), lapUnder (n = seconds), trophy,
--- season (n = new seasons started). tests/Goals.spec.luau checks they can all be met.
+-- season (n = new seasons started), crew (n = members hired). tests/Goals.spec.luau checks
+-- they can all be met.
 Config.Goals = {
 	{ kind = "banks", n = 1, text = "Bank your first cash", minutes = 1, floor = 30 },
 	{ kind = "purchases", n = 2, text = "Buy 2 machines", minutes = 2, floor = 60 },
 	{ kind = "laps", n = 1, text = "Drive a clean lap", minutes = 2, floor = 100 },
 	{ kind = "purchases", n = 5, text = "Buy 5 machines", minutes = 3, floor = 200 },
+	{ kind = "crew", n = 1, text = "Hire your first crew member", minutes = 3, floor = 300 },
 	{ kind = "earned", n = 10000, text = "Earn $10K", minutes = 3, floor = 300 },
 	{ kind = "lapUnder", n = 25, text = "Lap in under 0:25", minutes = 4, floor = 400 },
 	{ kind = "purchases", n = 10, text = "Buy 10 machines", minutes = 4, floor = 500 },

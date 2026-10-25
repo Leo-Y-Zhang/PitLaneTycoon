@@ -315,10 +315,19 @@ local function pickPrice(st: State): number
 	return cratePrice(st) * Config.Crew.pick.crates[currentPick().rarity]
 end
 
+local function crewHired(st: State): number
+	local n = 0
+	for _, count in st.data.crew do
+		n += count
+	end
+	return n
+end
+
 local function goalStats(st: State): Goals.Stats
 	return {
 		banks = st.data.banks, purchases = purchasesOf(st), laps = st.data.laps, earned = st.data.earned,
 		bestLap = st.data.bestLap, season = st.data.season, trophy = st.data.bought.trophy == true,
+		crew = crewHired(st),
 	}
 end
 
@@ -1276,6 +1285,7 @@ local function hire(player: Player, st: State, member: Crew.Member)
 	st.dirty = true
 	refreshCrew(st.plot, st)
 	publish(player)
+	checkGoals(player)
 	effect:FireClient(player, "hired", member.key)
 	if member.rarity == #Config.Crew.rarities then -- the whole server hears about a Legendary
 		notify:FireAllClients(("%s hired a LEGENDARY %s!"):format(st.plot.team.name, member.name))
