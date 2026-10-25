@@ -593,8 +593,8 @@ if RunService:IsClient() then
 			panel.Visible = true -- in the screenshot
 			task.wait(0.5)
 			local c = panel.Cards
-			clientCheck("cards run commonest first, Config order", c.fitter.AbsolutePosition.X < c.mechanic.AbsolutePosition.X
-				and c.fitter.AbsolutePosition.Y < c.principal.AbsolutePosition.Y)
+			clientCheck("cards run commonest first, in Config order", c.fitter.AbsolutePosition.X < c.mechanic.AbsolutePosition.X
+				and c.fitter.AbsolutePosition.Y < c.aero.AbsolutePosition.Y)
 		end
 		local shopButton = nil
 		for _, b in (crewButton and crewButton.Parent:GetChildren() or {}) do
