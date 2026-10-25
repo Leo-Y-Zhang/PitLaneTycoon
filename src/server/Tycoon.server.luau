@@ -58,6 +58,7 @@ local notify = remote("Notify")
 local newSeason = remote("NewSeason")
 local claimGift = remote("ClaimGift")
 local settings = remote("Settings") -- ("music" | "sfx", on)
+local welcomed = remote("Welcomed") -- the first-visit card was read
 local redeem = Instance.new("RemoteFunction") -- a code in, a message back
 redeem.Name = "Redeem"
 redeem.Parent = remotes
@@ -140,6 +141,7 @@ type Data = {
 	bestLap: number, laps: number, -- time trial: best lap in seconds (0 = none yet), clean laps
 	goal: number, banks: number, codes: { [string]: boolean }, -- the next goal (Config.Goals), times banked, codes used
 	settings: { music: boolean, sfx: boolean },
+	welcomed: boolean, -- has seen the first-visit card
 }
 type State = {
 	data: Data, plot: any?, pending: number, canSave: boolean, passes: { [string]: boolean }, dirty: boolean, friends: number,
@@ -153,7 +155,7 @@ local function freshData(): Data
 	return {
 		cash = 0, bought = {}, season = 0, lastDaily = 0, streak = 0, receipts = {},
 		earned = 0, lastSeen = 0, offlineRate = 0, funnel = 0, bestLap = 0, laps = 0,
-		goal = 1, banks = 0, codes = {}, settings = { music = true, sfx = true },
+		goal = 1, banks = 0, codes = {}, settings = { music = true, sfx = true }, welcomed = false,
 	}
 end
 
@@ -290,6 +292,7 @@ local function publish(player: Player)
 	end
 	player:SetAttribute("GiftAt", st.giftAt)
 	player:SetAttribute("MusicOn", st.data.settings.music ~= false)
+	player:SetAttribute("Welcome", not st.data.welcomed)
 	player:SetAttribute("SfxOn", st.data.settings.sfx ~= false)
 	for name in Config.Passes do
 		player:SetAttribute("Owns" .. name, st.passes[name] == true)
@@ -513,6 +516,7 @@ local function tryBuy(player: Player, index: number)
 	end
 	st.data.cash -= item.cost
 	st.data.bought[item.key] = true
+	st.data.welcomed = true -- they have the idea
 	st.dirty = true
 	build(player, item)
 	refreshPads(player)
@@ -963,6 +967,15 @@ local function lapDone(player: Player, seconds: number)
 	Analytics.earned(player, reward, st.data.cash, Enum.AnalyticsEconomyTransactionType.Gameplay, "Lap")
 	checkGoals(player)
 end
+
+welcomed.OnServerEvent:Connect(function(player)
+	local st = states[player]
+	if st and not st.data.welcomed then
+		st.data.welcomed = true
+		st.dirty = true
+		publish(player)
+	end
+end)
 
 -- music and sounds on or off, kept with the save
 settings.OnServerEvent:Connect(function(player, which, on)

@@ -140,12 +140,17 @@ local function photoShoot()
 	pcall(function()
 		game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
 	end)
-	local hud = waitFor(function()
-		return player.PlayerGui:FindFirstChild("PitLaneHud")
+	waitFor(function()
+		return player.PlayerGui:FindFirstChild("PitLaneHud") and player.PlayerGui:FindFirstChild("PitLaneSettings")
 	end, 30)
-	if hud then
-		hud.Enabled = false
+	local function hideGuis()
+		for _, gui in player.PlayerGui:GetChildren() do
+			if gui:IsA("ScreenGui") then
+				gui.Enabled = false
+			end
+		end
 	end
+	hideGuis()
 	local plot = waitFor(function()
 		for _, model in workspace:WaitForChild("Plots"):GetChildren() do
 			local board = model:FindFirstChild("Sign") and model.Sign:FindFirstChildOfClass("BillboardGui")
@@ -193,6 +198,41 @@ local function photoShoot()
 		task.wait(1.5)
 		print(TAG, "SHOT " .. shot[1])
 		task.wait(2.5)
+	end
+	-- the car on the track, just past the gantry
+	game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Drive"):FireServer(true)
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local seat = humanoid and waitFor(function()
+		return humanoid.SeatPart
+	end, 8)
+	if seat then
+		local shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+		local TrackShape = require(shared:WaitForChild("TrackShape")) :: any
+		local track = (require(shared:WaitForChild("Config")) :: any).Track
+		local car = seat.Parent :: Model
+		local x, z = TrackShape.point(track, 0.06)
+		local tx, tz = TrackShape.tangent(track, 0.06)
+		local at = Vector3.new(x, 1.1, z)
+		local hold = RunService.Heartbeat:Connect(function()
+			car:PivotTo(CFrame.lookAt(at, at + Vector3.new(tx, 0, tz)))
+		end)
+		task.wait(1)
+		hideGuis()
+		for _, d in (character :: Model):GetDescendants() do
+			if d:IsA("BasePart") or d:IsA("Decal") then
+				d.LocalTransparencyModifier = 1
+			end
+		end
+		local side = Vector3.new(tz, 0, -tx) -- outwards
+		cam.CFrame = CFrame.lookAt(at + Vector3.new(tx, 0, tz) * 16 + side * 7 + Vector3.new(0, 3, 0), at - Vector3.new(tx, 0, tz) * 6)
+		task.wait(1.5)
+		print(TAG, "SHOT race")
+		task.wait(2.5)
+		cam.CFrame = CFrame.lookAt(at + side * 60 + Vector3.new(0, 30, 0), at + Vector3.new(0, 2, 0))
+		task.wait(1.5)
+		print(TAG, "SHOT track")
+		task.wait(2.5)
+		hold:Disconnect()
 	end
 	print(TAG, "PHOTOS-DONE")
 end
@@ -261,6 +301,8 @@ if RunService:IsClient() then
 			end
 		end
 		clientCheck("the goal panel shows the current goal", goalShown, player:GetAttribute("GoalText"))
+		local card = hud:FindFirstChild("Welcome") :: Frame?
+		clientCheck("the welcome card shows on a first visit", card and (card.Visible or player:GetAttribute("Welcome") == false))
 		clientCheck("the gift counts down", giftText, giftText)
 		game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("ClaimGift"):FireServer()
 		clientCheck("a gift claimed early is refused", waitFor(function()
@@ -443,6 +485,28 @@ if SCENARIO == "photo" then
 	-- that a garage with every machine earns what the HUD says it earns, and reports any
 	-- error from building every machine at once
 	local ratio = 0
+	-- how hard the server works with every machine running (the photo garage)
+	local perf = { step = 0, worst = 0, fps = 0, parts = 0, drops = 0 }
+	task.delay(20, function()
+		local total, n = 0, 0
+		local conn = RunService.Heartbeat:Connect(function(dt)
+			total += dt
+			n += 1
+			perf.worst = math.max(perf.worst, dt)
+		end)
+		task.wait(10)
+		conn:Disconnect()
+		perf.step = total / math.max(n, 1)
+		perf.fps = workspace:GetRealPhysicsFPS()
+		for _, d in workspace:GetDescendants() do
+			if d:IsA("BasePart") then
+				perf.parts += 1
+			end
+		end
+		for _, model in workspace:WaitForChild("Plots"):GetChildren() do
+			perf.drops += #model:WaitForChild("Drops"):GetChildren()
+		end
+	end)
 	task.spawn(function()
 		local player = waitFor(function()
 			return Players:GetPlayers()[1]
@@ -456,6 +520,8 @@ if SCENARIO == "photo" then
 	task.delay(45, function()
 		local ok = ratio > 0.85 and ratio < 1.15
 		print(TAG, (ok and "PASS " or "FAIL ") .. ("a full garage earns what the HUD says (%.2f of it)"):format(ratio))
+		print(TAG, ("PERF one full garage: server step %.1f ms (worst %.1f), physics %.0f fps, %d parts in the world, %d on the line"):format(
+			perf.step * 1000, perf.worst * 1000, perf.fps, perf.parts, perf.drops))
 		StudioTestService:EndTest({ passed = ok and 1 or 0, total = 1, errors = errors, warnings = warnings })
 	end)
 	return
@@ -554,6 +620,7 @@ local function run()
 	check("the next purchase is published", player:GetAttribute("NextKey") == "press2"
 		and player:GetAttribute("NextCost") == 60, player:GetAttribute("NextKey"))
 	check("the analytics funnel logs the join", player:GetAttribute("FunnelStep") == 1, player:GetAttribute("FunnelStep"))
+	check("a new player gets the welcome card", player:GetAttribute("Welcome") == true, player:GetAttribute("Welcome"))
 	check("the first goal is to bank cash", player:GetAttribute("GoalText") == "Bank your first cash",
 		player:GetAttribute("GoalText"))
 	local giftIn = (player:GetAttribute("GiftAt") or 0) - workspace:GetServerTimeNow()
@@ -635,6 +702,9 @@ local function run()
 	check("it cost $60", cash.Value <= cashBefore - 60 + 15, ("%d -> %d"):format(cashBefore, cash.Value))
 	check("income rises to $210/min", player:GetAttribute("IncomePerMin") == 210 * x, player:GetAttribute("IncomePerMin"))
 	check("the funnel logs the first purchase", player:GetAttribute("FunnelStep") == 2, player:GetAttribute("FunnelStep"))
+	check("buying a machine puts the welcome card away", waitFor(function()
+		return player:GetAttribute("Welcome") == false
+	end, 3))
 	check("the first purchase lays the garage floor and clears the cones", waitFor(function()
 		return has(plot, "Floor") and not has(plot, "Cones")
 	end, 3))
