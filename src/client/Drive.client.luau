@@ -110,8 +110,10 @@ local function refreshPanel(go: boolean, lit: number)
 		clock.Text = lapTime(math.max(0, workspace:GetServerTimeNow() - start))
 		clock.TextColor3 = INK
 	end
-	local last, best = player:GetAttribute("LastLap"), player:GetAttribute("BestLap") or 0
-	times.Text = ("Last %s   Best %s"):format(last and lapTime(last) or "-", best > 0 and lapTime(best) or "-")
+	local reverse = player:GetAttribute("Layout") == "reverse"
+	local last, best = player:GetAttribute("LastLap"), player:GetAttribute(reverse and "BestLapReverse" or "BestLap") or 0
+	times.Text = ("%sLast %s   Best %s"):format(reverse and "Reverse GP   " or "", last and lapTime(last) or "-",
+		best > 0 and lapTime(best) or "-")
 end
 
 -- driving ---------------------------------------------------------------------------

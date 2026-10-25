@@ -167,6 +167,7 @@ Config.Track = {
 	waves = { { 22, 3, 0.3 }, { 10, 5, 1.0 }, { 4, 8, 0.2 } },
 	halfWidth = 8,
 	limit = 13,
+	reverseFromSeason = 1, -- the Reverse GP (the same circuit the other way) opens in season 2
 }
 -- The race car (src/shared/DriveModel.luau). Speeds in studs per second; it gets faster
 -- every season. A clean lap pays lapRewardMinutes of income, a new best lap bestLapMinutes
@@ -177,6 +178,7 @@ Config.Drive = {
 	lapRewardMinutes = 0.25, lapRewardFloor = 20, bestLapMinutes = 2,
 }
 Config.LapBoardName = "PitLaneTycoon_BestLap_v1"
+Config.LapBoardReverseName = "PitLaneTycoon_BestLapReverse_v1"
 
 -- Leaderboard of factory earnings across all seasons (bought cash and rewards don't count).
 Config.LeaderboardName = "PitLaneTycoon_Earned_v1"

@@ -21,10 +21,11 @@ export type Host = {
 	colour: (Player) -> Color3,
 	slot: (Player) -> number, -- the player's garage number, for a place on the grid
 	garage: (Player) -> CFrame?, -- where a player goes back to after driving
-	lap: (Player, number) -> (), -- a clean lap of this many seconds
+	lap: (Player, number, boolean) -> (), -- a clean lap of this many seconds (true = Reverse GP)
+	tell: (Player, string) -> (), -- a message on the player's screen
 }
 
-type Car = { model: Model, chassis: BasePart, seat: VehicleSeat, timer: LapTimer.Timer }
+type Car = { model: Model, chassis: BasePart, seat: VehicleSeat, timer: LapTimer.Timer, reverse: boolean }
 local cars: { [Player]: Car } = {}
 local host: Host
 local folder: Folder
@@ -39,14 +40,16 @@ function Racing.topSpeed(season: number): number
 	return math.min(Config.Drive.maxTopSpeed, Config.Drive.topSpeed + Config.Drive.perSeason * season)
 end
 
--- a place on the grid just behind the start line, nose along the track
-local function gridSpot(slot: number): CFrame
-	local a = -0.035 - 0.014 * ((slot - 1) // 2)
+-- a place on the grid just behind the start line, nose along the track (the other side of
+-- the line and the other way round for the Reverse GP)
+local function gridSpot(slot: number, reverse: boolean): CFrame
+	local way = reverse and -1 or 1
+	local a = way * (-0.035 - 0.014 * ((slot - 1) // 2))
 	local x, z = TrackShape.point(Config.Track, a)
 	local dx, dz = TrackShape.tangent(Config.Track, a)
 	local side = (slot % 2 == 0 and 1 or -1) * 3.5
 	local at = Vector3.new(x - dz * side, 0.2, z + dx * side)
-	return CFrame.lookAt(at, at + Vector3.new(dx, 0, dz))
+	return CFrame.lookAt(at, at + Vector3.new(dx, 0, dz) * way)
 end
 
 local function weld(a: BasePart, b: BasePart)
@@ -58,7 +61,7 @@ end
 -- the show car's body on an invisible chassis that glides on four ball skids (they slide
 -- over the joins between road pieces); a LinearVelocity and an AngularVelocity, set by the
 -- driver's computer, do the driving and keep the car level
-local function buildCar(player: Player, pose: CFrame, season: number): Car
+local function buildCar(player: Player, pose: CFrame, season: number, reverse: boolean): Car
 	local model = Scenery.car(folder, pose, host.colour(player), season)
 	model.Name = "Car_" .. player.UserId
 	local chassis = Instance.new("Part")
@@ -135,8 +138,9 @@ local function buildCar(player: Player, pose: CFrame, season: number): Car
 		end,
 		limit = Config.Track.limit,
 		maxSpeed = top,
+		reverse = reverse,
 	})
-	return { model = model, chassis = chassis, seat = seat, timer = timer }
+	return { model = model, chassis = chassis, seat = seat, timer = timer, reverse = reverse }
 end
 
 local function setLap(player: Player, start: number, valid: boolean)
@@ -162,16 +166,23 @@ function Racing.leave(player: Player)
 	end
 end
 
-function Racing.drive(player: Player)
+-- layout: "gp" (the default) or "reverse", which opens in Config.Track.reverseFromSeason
+function Racing.drive(player: Player, layout: string?)
 	if cars[player] then return end
 	local season = host.season(player)
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if season == nil or not humanoid or humanoid.Health <= 0 or humanoid.SeatPart then return end
-	local pose = gridSpot(host.slot(player))
-	local car = buildCar(player, pose, season)
+	local reverse = layout == "reverse"
+	if reverse and season < Config.Track.reverseFromSeason then
+		host.tell(player, ("The Reverse GP opens in season %d"):format(Config.Track.reverseFromSeason + 1))
+		return
+	end
+	local pose = gridSpot(host.slot(player), reverse)
+	local car = buildCar(player, pose, season, reverse)
 	cars[player] = car
 	player:SetAttribute("Driving", true)
+	player:SetAttribute("Layout", reverse and "reverse" or "gp")
 	setLap(player, 0, true)
 	character:PivotTo(pose * CFrame.new(0, 4, 0))
 	car.seat:Sit(humanoid)
@@ -219,7 +230,7 @@ local function tick()
 		if event and event.kind == "lap" then
 			player:SetAttribute("LastLap", event.time)
 			if event.valid then
-				host.lap(player, event.time :: number)
+				host.lap(player, event.time :: number, car.reverse)
 			end
 		end
 		if event then
@@ -253,9 +264,9 @@ function Racing.start(h: Host, remotes: Folder)
 	local drive = Instance.new("RemoteEvent")
 	drive.Name = "Drive" -- true = take me to my car, false = let me out
 	drive.Parent = remotes
-	drive.OnServerEvent:Connect(function(player, want)
+	drive.OnServerEvent:Connect(function(player, want, layout)
 		if want == true then
-			Racing.drive(player)
+			Racing.drive(player, if layout == "reverse" then "reverse" else "gp")
 		elseif want == false then
 			Racing.leave(player)
 		end

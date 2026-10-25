@@ -195,9 +195,30 @@ for col = 0, 2 do
 end
 local seasonButton = button("New season", Color3.fromRGB(200, 150, 20), bar)
 seasonButton.Visible = false
--- the time trial: into your car on the grid, or back out to the garage
+-- the time trial: into your car on the grid, or back out to the garage. Once the Reverse GP
+-- is open, Race asks which way round first.
+local chooser = new("Frame", {
+	Name = "LayoutChooser", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 172, 0.42, 0),
+	Size = UDim2.fromOffset(150, 98), BackgroundTransparency = 1, Visible = false,
+}, gui)
+new("UIListLayout", { FillDirection = Enum.FillDirection.Vertical, Padding = UDim.new(0, 10) }, chooser)
+scaled(chooser)
+for _, choice in { { "Grand Prix", "gp", Color3.fromRGB(28, 86, 214) }, { "Reverse GP", "reverse", Color3.fromRGB(120, 60, 200) } } do
+	local b = button(choice[1], choice[3], chooser)
+	b.Name = choice[2]
+	b.Activated:Connect(function()
+		chooser.Visible = false
+		remotes:WaitForChild("Drive"):FireServer(true, choice[2])
+	end)
+end
 raceButton.Activated:Connect(function()
-	remotes:WaitForChild("Drive"):FireServer(player:GetAttribute("Driving") ~= true)
+	if player:GetAttribute("Driving") == true then
+		remotes:WaitForChild("Drive"):FireServer(false)
+	elseif player:GetAttribute("ReverseUnlocked") == true then
+		chooser.Visible = not chooser.Visible
+	else
+		remotes:WaitForChild("Drive"):FireServer(true, "gp")
+	end
 end)
 
 -- shop ------------------------------------------------------------------------------

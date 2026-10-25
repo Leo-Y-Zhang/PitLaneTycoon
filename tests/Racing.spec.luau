@@ -199,6 +199,31 @@ do -- a teleport
 		lap and lap.reason)
 end
 
+do -- the Reverse GP: the same circuit the other way round
+	local rt = LapTimer.new({
+		nearest = function(x: number, z: number)
+			return TrackShape.nearest(shape, x, z)
+		end,
+		limit = shape.limit,
+		maxSpeed = 65,
+		reverse = true,
+	})
+	local events = drive(rt, 0.04, -TAU - 0.3, 40, 0.1, 0)
+	local expect = length / 40
+	check("a Reverse GP lap starts at the line and is timed", events[1] and events[1].kind == "start" and events[2]
+		and events[2].kind == "lap" and math.abs(events[2].time - expect) / expect < 0.01, events[2] and events[2].time)
+	local wrongWay = LapTimer.new({
+		nearest = function(x: number, z: number)
+			return TrackShape.nearest(shape, x, z)
+		end,
+		limit = shape.limit,
+		maxSpeed = 65,
+		reverse = true,
+	})
+	local forwards = drive(wrongWay, 0.04, TAU + 0.3, 40, 0.1, 0)
+	check("driving the GP way round in the Reverse GP never counts a lap", #forwards == 0, #forwards)
+end
+
 do -- reversing over the line and going again
 	local t = timer()
 	local _, now = drive(t, -0.04, 0.5, 40, 0.1, 0) -- started
