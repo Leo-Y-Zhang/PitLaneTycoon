@@ -353,6 +353,17 @@ if RunService:IsClient() then
 			end
 		end
 		clientCheck("the goal panel shows the current goal", goalShown, player:GetAttribute("GoalText"))
+		-- the live event strip, when the server half starts one
+		task.spawn(function()
+			while workspace:GetAttribute("EventName") ~= "Safety car" do
+				workspace:GetAttributeChangedSignal("EventName"):Wait()
+			end
+			task.wait(1)
+			local strip = hud:FindFirstChild("EventBar", true) :: Frame?
+			local text = strip and strip:FindFirstChildOfClass("TextLabel")
+			clientCheck("the live event shows on a strip under the top bar", strip and strip.Visible and text
+				and string.find(text.Text, "SAFETY CAR", 1, true), text and text.Text)
+		end)
 		local card = hud:FindFirstChild("Welcome") :: Frame?
 		clientCheck("the welcome card shows on a first visit", card and (card.Visible or player:GetAttribute("Welcome") == false))
 		clientCheck("the gift counts down", giftText, giftText)
@@ -895,6 +906,37 @@ local function run()
 		end
 	end
 	check("the game logged no warnings of its own", #own == 0, own[1])
+
+	-- a live event: the test starts a short Safety car at once; income doubles, then returns
+	local incomeBefore = player:GetAttribute("IncomePerMin") or 0
+	workspace:SetAttribute("PLT_EventSeconds", 8)
+	workspace:SetAttribute("PLT_StartEvent", "Safety car")
+	check("a live event starts for the whole server", waitFor(function()
+		return workspace:GetAttribute("EventName") == "Safety car"
+	end, 4), workspace:GetAttribute("EventName"))
+	check("the Safety car doubles income", waitFor(function()
+		return player:GetAttribute("IncomePerMin") == incomeBefore * 2
+	end, 3), ("%d -> %d"):format(incomeBefore, player:GetAttribute("IncomePerMin") or 0))
+	check("and ends on time, income back to normal", waitFor(function()
+		return workspace:GetAttribute("EventName") == "" and player:GetAttribute("IncomePerMin") == incomeBefore
+	end, 12), player:GetAttribute("IncomePerMin"))
+	workspace:SetAttribute("PLT_EventSeconds", nil)
+
+	-- a rare part: the test asks for Gold ones; they glow and are worth five times as much
+	workspace:SetAttribute("PLT_ForceRare", "Gold")
+	local gold = waitFor(function()
+		for _, drop in plot.Drops:GetChildren() do
+			if drop:GetAttribute("Rare") == "Gold" then
+				return drop
+			end
+		end
+		return nil
+	end, 6)
+	workspace:SetAttribute("PLT_ForceRare", nil)
+	check("a press can stamp a Gold part", gold and (gold :: BasePart).Material == Enum.Material.Neon)
+	local goldValue = gold and gold:GetAttribute("Value") or 0
+	-- the line has the Bolt press ($2 a part) and the Bracket press ($5) so far
+	check("worth five times a normal part", goldValue == 10 or goldValue == 25, goldValue)
 
 	-- leave the character somewhere visible for a screenshot
 	character:PivotTo(base.CFrame * CFrame.new(-8, 4, -14) * CFrame.Angles(0, math.rad(200), 0))

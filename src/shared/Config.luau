@@ -101,6 +101,24 @@ Config.Audio = {
 	music = { 9044706933, 1836950435, 1837768143, 1840321341 },
 }
 
+-- Rare parts, the way the biggest Roblox games use rarities and mutations: now and then a
+-- press stamps a Gold or Rainbow part worth many times more, glowing on the line (a Rainbow is
+-- announced to the whole server). Together they add about 11% to income (tests/Rarity.spec.luau).
+Config.RareParts = {
+	{ name = "Gold", chance = 1 / 60, mult = 5 },
+	{ name = "Rainbow", chance = 1 / 600, mult = 25 },
+} :: { { name: string, chance: number, mult: number } }
+
+-- Live events: every few minutes the whole server gets one at the same time, so there is
+-- always something about to happen. incomeMult multiplies earnings, rareMult the rare chances.
+Config.Events = {
+	everyMinutes = 12,
+	list = {
+		{ name = "Safety car", seconds = 90, incomeMult = 2, rareMult = 1, text = "every part pays double" },
+		{ name = "Gold rush", seconds = 120, incomeMult = 1, rareMult = 5, text = "rare parts five times as likely" },
+	},
+}
+
 Config.BaseConveyorSpeed = 9
 Config.PartLifetime = 25 -- seconds before an uncollected part is cleared
 

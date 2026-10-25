@@ -17,6 +17,7 @@ local Racing = require(script.Parent:WaitForChild("Racing"))
 local GaragePlan = require(script.Parent:WaitForChild("GaragePlan"))
 local Goals = require(script.Parent:WaitForChild("Goals"))
 local Codes = require(script.Parent:WaitForChild("Codes"))
+local Rarity = require(script.Parent:WaitForChild("Rarity"))
 local Analytics = require(script.Parent:WaitForChild("Analytics"))
 -- this server's name on a save lock (Studio has no JobId)
 local JOB = game.JobId ~= "" and game.JobId or ("studio-" .. HttpService:GenerateGUID(false))
@@ -168,6 +169,8 @@ local function isHappyHour(): boolean
 end
 local happyHour = isHappyHour()
 workspace:SetAttribute("HappyHour", happyHour)
+local liveEvent = nil -- the Config.Events entry running now, if any
+local rng = Random.new()
 
 -- seasons and passes: the lasting part of the multiplier (offline earnings use only this)
 local function baseMultiplier(st: State): number
@@ -183,6 +186,7 @@ end
 
 local function multiplier(st: State): number
 	return baseMultiplier(st) * (1 + friendBoost(st)) * (happyHour and Config.HappyHour.mult or 1)
+		* (liveEvent and liveEvent.incomeMult or 1)
 end
 
 local function conveyorSpeed(st: State): number
@@ -366,7 +370,25 @@ local function spawnPress(player: Player, item)
 			drop.Color = look[2]
 			drop.Material = look[3]
 			drop.CFrame = at(plot, item.x, 4.6, 0)
-			drop:SetAttribute("Value", pressValue(st, item))
+			-- now and then a rare one (Studio tests can ask for one with PLT_ForceRare)
+			local rare, rareMult = Rarity.roll(rng:NextNumber(), liveEvent and liveEvent.rareMult or 1, Config.RareParts)
+			local forced = RunService:IsStudio() and workspace:GetAttribute("PLT_ForceRare")
+			if forced then
+				for _, tier in Config.RareParts do
+					if tier.name == forced then
+						rare, rareMult = tier.name, tier.mult
+					end
+				end
+			end
+			drop:SetAttribute("Value", pressValue(st, item) * rareMult)
+			if rare then
+				drop:SetAttribute("Rare", rare)
+				drop.Material = Enum.Material.Neon
+				drop.Color = rare == "Gold" and Color3.fromRGB(255, 196, 40) or Color3.fromRGB(255, 70, 210)
+				local sparkles = Instance.new("Sparkles")
+				sparkles.SparkleColor = drop.Color
+				sparkles.Parent = drop
+			end
 			drop.Parent = plot.drops
 			-- the server moves every part, so a player's client can't steer them
 			drop:SetNetworkOwner(nil)
@@ -400,7 +422,9 @@ local function spawnUpgrade(player: Player, item)
 	gate.Touched:Connect(function(hit)
 		if hit.Parent == plot.drops and not hit:GetAttribute(tag) then
 			hit:SetAttribute(tag, true)
-			hit.Color = Color3.fromRGB(255, 120, 40)
+			if not hit:GetAttribute("Rare") then -- a rare part keeps its shine
+				hit.Color = Color3.fromRGB(255, 120, 40)
+			end
 		end
 	end)
 end
@@ -616,8 +640,14 @@ local function makePlot(index: number)
 		if hit.Parent ~= plot.drops or not plot.owner then return end
 		local st = states[plot.owner]
 		local value = (hit:GetAttribute("Value") or 0) * (st and gateMultiplier(st) * multiplier(st) or 1)
+		local rare = hit:GetAttribute("Rare")
 		hit:Destroy()
 		if not st then return end
+		if rare == "Rainbow" then -- the whole server hears about a Rainbow
+			notify:FireAllClients(("%s stamped a RAINBOW part! +%s"):format(plot.team.name, money(value)))
+		elseif rare then
+			notify:FireClient(plot.owner, rare .. " part! +" .. money(value))
+		end
 		if st.passes.AutoCollect then
 			addCash(plot.owner, value, true)
 		else
@@ -1237,6 +1267,43 @@ task.spawn(function()
 					notify:FireClient(player, "Happy hour! Everything earns 2x for the next hour")
 				end
 			end
+		end
+	end
+end)
+
+-- live events: one every few minutes, the same for everyone in the server. In Studio a test can
+-- start one at once (PLT_StartEvent, PLT_EventSeconds).
+task.spawn(function()
+	local turn = 0
+	while true do
+		local due = os.clock() + Config.Events.everyMinutes * 60
+		while os.clock() < due and not (RunService:IsStudio() and workspace:GetAttribute("PLT_StartEvent")) do
+			task.wait(1)
+		end
+		turn = turn % #Config.Events.list + 1
+		local event = Config.Events.list[turn]
+		if RunService:IsStudio() then
+			for _, e in Config.Events.list do
+				if e.name == workspace:GetAttribute("PLT_StartEvent") then
+					event = e
+				end
+			end
+		end
+		local seconds = RunService:IsStudio() and workspace:GetAttribute("PLT_EventSeconds") or event.seconds
+		workspace:SetAttribute("PLT_StartEvent", nil)
+		liveEvent = event
+		workspace:SetAttribute("EventName", event.name)
+		workspace:SetAttribute("EventText", event.text)
+		workspace:SetAttribute("EventEnds", workspace:GetServerTimeNow() + seconds)
+		for player in states do
+			publish(player)
+			notify:FireClient(player, event.name .. "! " .. event.text)
+		end
+		task.wait(seconds)
+		liveEvent = nil
+		workspace:SetAttribute("EventName", "")
+		for player in states do
+			publish(player)
 		end
 	end
 end)

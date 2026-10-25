@@ -123,6 +123,8 @@ RunService.Heartbeat:Connect(function(dt)
 	local seat = humanoid and humanoid.SeatPart
 	local driving = seat ~= nil and seat:IsA("VehicleSeat") and seat:GetAttribute("RaceCar") == true
 	panel.Visible = driving
+	-- below the live event's strip when one is running
+	panel.Position = UDim2.new(0.5, 0, 0, (workspace:GetAttribute("EventName") or "") ~= "" and 152 or 112)
 	if not driving then
 		if startedAt then -- out of the car: lights back to how everyone sees them, engine off
 			startedAt = nil
