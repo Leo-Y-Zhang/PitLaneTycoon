@@ -66,6 +66,11 @@ local scales: { UIScale } = {}
 local function scaled(o: GuiObject)
 	table.insert(scales, new("UIScale", {}, o))
 end
+-- the panels that open in the middle: on a computer they keep clear of the player list
+local panels: { { frame: GuiObject, width: number, scale: UIScale } } = {}
+local function centred(o: GuiObject)
+	table.insert(panels, { frame = o, width = o.Size.X.Offset, scale = new("UIScale", {}, o) })
+end
 local topScale: UIScale? = nil
 local topFrame: Frame? = nil
 local function rescale()
@@ -74,9 +79,14 @@ local function rescale()
 	for _, u in scales do
 		u.Scale = s
 	end
-	-- the top bar keeps clear of the player list a computer shows top right (Layout)
+	-- the top bar and the middle panels keep clear of the player list a computer shows top right (Layout)
+	local phone = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+	for _, p in panels do
+		local centre, panelScale = Layout.panel(view.X, view.Y, p.width, phone)
+		p.frame.Position = UDim2.new(0, centre, 0.5, 0)
+		p.scale.Scale = panelScale
+	end
 	if topScale and topFrame then
-		local phone = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 		local centre, barScale = Layout.topBar(view.X, view.Y, phone)
 		topFrame.Position = UDim2.fromOffset(centre, 10)
 		topScale.Scale = barScale
@@ -273,7 +283,7 @@ local shop = new("Frame", {
 	BackgroundColor3 = PANEL, Visible = false,
 }, gui)
 round(shop, 14)
-scaled(shop)
+centred(shop)
 new("UIStroke", { Color = RED, Thickness = 2 }, shop)
 new("TextLabel", {
 	Size = UDim2.new(1, 0, 0, 46), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextSize = 22,
@@ -365,7 +375,7 @@ local crewPanel = new("Frame", {
 	Size = UDim2.fromOffset(440, 500), BackgroundColor3 = PANEL, Visible = false,
 }, gui)
 round(crewPanel, 14)
-scaled(crewPanel)
+centred(crewPanel)
 new("UIStroke", { Color = PURPLE, Thickness = 2 }, crewPanel)
 new("TextLabel", {
 	Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextSize = 22,
@@ -625,7 +635,7 @@ local confirm = new("Frame", {
 	BackgroundColor3 = PANEL, Visible = false,
 }, gui)
 round(confirm, 14)
-scaled(confirm)
+centred(confirm)
 new("UIStroke", { Color = Color3.fromRGB(200, 150, 20), Thickness = 2 }, confirm)
 local confirmText = new("TextLabel", {
 	Position = UDim2.fromOffset(16, 12), Size = UDim2.new(1, -32, 0, 140), BackgroundTransparency = 1,
@@ -759,7 +769,7 @@ local welcome = new("Frame", {
 	BackgroundColor3 = PANEL, BackgroundTransparency = 0.05, Visible = false,
 }, gui)
 round(welcome, 14)
-scaled(welcome)
+centred(welcome)
 new("UIStroke", { Color = Color3.fromRGB(255, 205, 60), Thickness = 2 }, welcome)
 new("TextLabel", {
 	Position = UDim2.fromOffset(18, 12), Size = UDim2.new(1, -36, 0, 34), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack,

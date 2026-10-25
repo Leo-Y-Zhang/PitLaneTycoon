@@ -644,6 +644,13 @@ if RunService:IsClient() then
 		end
 		clientCheck("the crew panel shows every member, hired or not", cardCount == #Config.Crew.members, cardCount)
 		clientCheck("hired members show as hired", hiredShown >= 1, hiredShown)
+		local inputs = game:GetService("UserInputService")
+		local width = workspace.CurrentCamera.ViewportSize.X
+		local right = panel and panel.AbsolutePosition.X + panel.AbsoluteSize.X or 0
+		-- measured shut: its place is worked out on every resize, open or not
+		clientCheck("the crew panel stays clear of the player list", panel and panel.AbsoluteSize.X > 100
+			and ((inputs.TouchEnabled and not inputs.KeyboardEnabled) or right <= width - 320), -- the list is about 315 px wide
+			("right edge %d of %d"):format(right, width))
 		clientCheck("the crate odds are on show", panel and string.find(panel.Odds.Text, "Legendary 2%", 1, true), panel and panel.Odds.Text)
 		if panel then
 			panel.Visible = true -- in the screenshot
