@@ -202,6 +202,76 @@ if RunService:IsClient() then
 		end
 		clientCheck("banking cash shows a +$ pop-up", popUps > 0, popUps)
 	end)
+
+	-- the time trial: when the server half says so, take the car, reverse it under throttle,
+	-- lap the track along the centre line at 50 studs/s (the server times what it sees), cut
+	-- across the infield, then jump out
+	task.spawn(function()
+		local player = Players.LocalPlayer
+		while workspace:GetAttribute("PLT_Drive") ~= true do
+			workspace:GetAttributeChangedSignal("PLT_Drive"):Wait()
+		end
+		local shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+		local Config = require(shared:WaitForChild("Config")) :: any
+		local TrackShape = require(shared:WaitForChild("TrackShape")) :: any
+		game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Drive"):FireServer(true)
+		local humanoid = (player.Character :: Model):FindFirstChildOfClass("Humanoid") :: Humanoid
+		local seat = waitFor(function()
+			local s = humanoid.SeatPart
+			return s and s:IsA("VehicleSeat") and s
+		end, 8) :: VehicleSeat?
+		if not seat then
+			clientCheck("the car takes the player", false)
+			return
+		end
+		local car = seat.Parent :: Model
+		task.wait(0.5)
+		local hud = player.PlayerGui:FindFirstChild("PitLaneHud")
+		local leave = false
+		for _, d in (hud and hud:GetDescendants() or {}) do
+			leave = leave or (d:IsA("TextButton") and d.Text == "Leave car")
+		end
+		clientCheck("the Race button becomes Leave car", leave)
+		local panel = player.PlayerGui:FindFirstChild("PitLaneDrive")
+		local frame = panel and panel:FindFirstChildOfClass("Frame")
+		clientCheck("the lap panel shows while driving", frame and frame.Visible)
+
+		-- hold the brake (it reverses) for three seconds, after the controls have written theirs
+		local hold = RunService.Stepped:Connect(function()
+			seat.ThrottleFloat = -1
+		end)
+		task.wait(3)
+		hold:Disconnect()
+
+		local function place(a: number, off: number)
+			local x, z = TrackShape.point(Config.Track, a)
+			local tx, tz = TrackShape.tangent(Config.Track, a)
+			local at = Vector3.new(x + tz * off, 1.1, z - tx * off)
+			car:PivotTo(CFrame.lookAt(at, at + Vector3.new(tx, 0, tz)))
+		end
+		local a, clockSeen = -0.04, nil
+		local function run(to: number, off: number)
+			while a < to do
+				local dt = RunService.Heartbeat:Wait()
+				local x1, z1 = TrackShape.point(Config.Track, a)
+				local x2, z2 = TrackShape.point(Config.Track, a + 0.001)
+				a += 50 * dt / (math.sqrt((x2 - x1) ^ 2 + (z2 - z1) ^ 2) / 0.001)
+				place(a, off)
+				local clock = frame and frame:FindFirstChildOfClass("TextLabel")
+				if clock and string.match(clock.Text, "^%d:%d%d%.%d%d$") then
+					clockSeen = clock.Text
+				end
+			end
+		end
+		run(2 * math.pi + 0.5, 0)
+		clientCheck("the lap clock runs on screen", clockSeen, clockSeen)
+		run(2 * math.pi + 1.2, -30) -- through the infield
+		while workspace:GetAttribute("PLT_Drive") ~= false do
+			workspace:GetAttributeChangedSignal("PLT_Drive"):Wait()
+		end
+		humanoid.Sit = false
+		humanoid.Jump = true
+	end)
 	return
 end
 
@@ -417,6 +487,53 @@ local function run()
 	-- 9 -> 14 studs/s runs both presses 14/9 as fast: $210/min becomes $326/min
 	check("a faster conveyor speeds every press up", player:GetAttribute("IncomePerMin") == math.floor(210 * 14 / 9 * x),
 		player:GetAttribute("IncomePerMin"))
+
+	-- the time trial: the client half takes the car, reverses, laps and jumps out
+	local track = workspace:FindFirstChild("Track")
+	check("a time-trial track rings the paddock", track and #track:GetChildren() > 300, track and #track:GetChildren())
+	local showCar = plot.Items:FindFirstChild("ShowCar")
+	check("the show car offers a drive", showCar and showCar:FindFirstChildWhichIsA("ProximityPrompt", true))
+	check("a fastest-laps board stands at the spawn", workspace:FindFirstChild("LapBoard"))
+	local shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+	local TrackShape = require(shared:WaitForChild("TrackShape")) :: any
+	local trackShape = (require(shared:WaitForChild("Config")) :: any).Track
+	local cashBeforeLap = cash.Value
+	workspace:SetAttribute("PLT_Drive", true)
+	local car = waitFor(function()
+		local cars = workspace:FindFirstChild("RaceCars")
+		return cars and cars:FindFirstChild("Car_" .. player.UserId)
+	end, 10)
+	local humanoid = character:FindFirstChildOfClass("Humanoid") :: Humanoid
+	check("Race puts the player in their own car on the grid", car and waitFor(function()
+		return humanoid.SeatPart and humanoid.SeatPart:IsDescendantOf(car)
+	end, 6))
+	local chassis = car and car.PrimaryPart
+	check("the player's computer drives it", chassis and chassis:GetNetworkOwner() == player)
+	if chassis then
+		local from = chassis.Position
+		task.wait(3.5)
+		local moved = (chassis.Position - from).Magnitude
+		check("the pedals move the car (it reverses under the brake)", moved > 15, math.floor(moved))
+	end
+	check("crossing the line starts the clock", waitFor(function()
+		return (player:GetAttribute("LapStart") or 0) > 0
+	end, 15))
+	local lap = waitFor(function()
+		return player:GetAttribute("LastLap")
+	end, 45)
+	local expect = TrackShape.length(trackShape) / 50
+	check("a clean lap is timed by the server", lap and math.abs(lap - expect) / expect < 0.05,
+		lap and ("%.2f s, expected %.2f"):format(lap, expect))
+	check("a clean lap pays", cash.Value > cashBeforeLap, ("%d -> %d"):format(cashBeforeLap, cash.Value))
+	check("and becomes the best lap", lap and player:GetAttribute("BestLap") == lap, player:GetAttribute("BestLap"))
+	check("cutting across the infield voids the lap", waitFor(function()
+		return player:GetAttribute("LapValid") == false
+	end, 20), player:GetAttribute("LapProblem"))
+	workspace:SetAttribute("PLT_Drive", false)
+	check("jumping out puts the player back at their garage", waitFor(function()
+		local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		return car and not car.Parent and root and (root.Position - base.Position).Magnitude < 40
+	end, 10))
 
 	-- the game's own warnings: a failing analytics call or save warns once
 	local own = {}

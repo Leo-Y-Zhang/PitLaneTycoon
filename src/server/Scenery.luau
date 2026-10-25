@@ -1,8 +1,10 @@
 --!strict
--- Pit Lane Tycoon scenery: lighting, the paddock, garage walls and each team's show car.
+-- Pit Lane Tycoon scenery: lighting, the paddock, garage walls, each team's show car and the
+-- time-trial track.
 -- Pure decoration, built from code like everything else; nothing here touches money.
 
 local Lighting = game:GetService("Lighting")
+local TrackShape = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("TrackShape"))
 
 local Scenery = {}
 
@@ -184,6 +186,75 @@ function Scenery.car(parent: Instance, cf: CFrame, colour: Color3, season: numbe
 	end
 	car.Parent = parent
 	return car
+end
+
+-- the time-trial track: grass beyond the paddock, the road with white edge lines and red and
+-- white kerbs on the bends, a chequered start line and a gantry over it
+function Scenery.track(shape: TrackShape.Shape)
+	local folder = Instance.new("Folder")
+	folder.Name = "Track"
+	folder.Parent = workspace
+	local n = 200
+	local points = TrackShape.samples(shape, n)
+	local inner, outer = math.huge, 0
+	for _, p in points do
+		local r = math.sqrt(p.x * p.x + p.z * p.z)
+		inner, outer = math.min(inner, r), math.max(outer, r)
+	end
+	inner -= shape.halfWidth
+	outer += shape.halfWidth
+	local grass = block(folder, CFrame.new(0, -0.7, 0), Vector3.new(2 * outer + 80, 1, 2 * outer + 80),
+		Color3.fromRGB(78, 128, 64), Enum.Material.Grass)
+	grass.CanCollide = true
+	-- the paddock's asphalt stops just inside the track, so the infield between is grass
+	local floor = block(folder, CFrame.new(0, -0.6, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		Vector3.new(1, 2 * (inner - 3), 2 * (inner - 3)), Color3.fromRGB(84, 92, 98), Enum.Material.Asphalt)
+	floor.Name = "PaddockFloor"
+	floor.Shape = Enum.PartType.Cylinder
+	floor.CanCollide = true
+	for i, p in points do
+		local q = points[i % n + 1]
+		local prev = points[(i - 2) % n + 1]
+		local a, b = Vector3.new(p.x, 0, p.z), Vector3.new(q.x, 0, q.z)
+		-- alternate pieces sit a hair apart in height, so their overlaps don't flicker
+		local cf = CFrame.lookAt((a + b) / 2, b) * CFrame.new(0, 0.05 + (i % 2) * 0.02, 0)
+		local len = (b - a).Magnitude
+		local road = block(folder, cf, Vector3.new(2 * shape.halfWidth, 0.3, len + 1.4), Color3.fromRGB(52, 54, 58),
+			Enum.Material.Asphalt)
+		road.Name = "Road"
+		road.CanCollide = true
+		local before = (a - Vector3.new(prev.x, 0, prev.z)).Unit
+		local bend = math.acos(math.clamp(before:Dot((b - a).Unit), -1, 1))
+		for _, side in { -1, 1 } do
+			if bend > 0.07 then
+				block(folder, cf * CFrame.new(side * (shape.halfWidth + 0.6), 0.03, 0), Vector3.new(1.2, 0.36, len + 0.2),
+					i % 2 == 0 and Color3.fromRGB(214, 32, 32) or WHITE)
+			else
+				block(folder, cf * CFrame.new(side * (shape.halfWidth - 0.6), 0.04, 0), Vector3.new(0.4, 0.3, len + 1.4), WHITE)
+			end
+		end
+	end
+	local sx, sz = TrackShape.point(shape, 0)
+	local tx, tz = TrackShape.tangent(shape, 0)
+	local start = CFrame.lookAt(Vector3.new(sx, 0, sz), Vector3.new(sx + tx, 0, sz + tz))
+	for col = 0, 7 do
+		for row = 0, 1 do
+			block(folder, start * CFrame.new(-shape.halfWidth + 1 + col * 2, 0.24, (row - 0.5) * 1.2),
+				Vector3.new(2, 0.06, 1.2), (col + row) % 2 == 0 and WHITE or CARBON)
+		end
+	end
+	for _, x in { -1, 1 } do
+		local post = block(folder, start * CFrame.new(x * (shape.halfWidth + 2.5), 8, 0), Vector3.new(1.4, 16, 1.4), CARBON,
+			Enum.Material.Metal)
+		post.CanCollide = true
+	end
+	local beam = block(folder, start * CFrame.new(0, 15, 0), Vector3.new(2 * shape.halfWidth + 6.4, 3, 1.4), CARBON,
+		Enum.Material.Metal)
+	sign(beam, Enum.NormalId.Front, "TIME TRIAL", Color3.fromRGB(255, 205, 60))
+	sign(beam, Enum.NormalId.Back, "TIME TRIAL", Color3.fromRGB(255, 205, 60))
+	for k = -2, 2 do
+		block(folder, start * CFrame.new(k * 2.2, 13, -0.4), Vector3.new(1, 1, 0.6), Color3.fromRGB(255, 40, 40), Enum.Material.Neon)
+	end
 end
 
 return Scenery

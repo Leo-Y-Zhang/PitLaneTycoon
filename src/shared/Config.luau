@@ -95,6 +95,26 @@ Config.Offline = { share = 0.25, capHours = 8, minMinutes = 5 }
 -- wday 1 = Sunday, 7 = Saturday). 18:00 UTC is 19:00 in UK summer time.
 Config.HappyHour = { days = { 7, 1 }, startHourUtc = 18, hours = 1, mult = 2 }
 
+-- Time trial: a track round the paddock (src/shared/TrackShape.luau). In polar coordinates
+-- about the spawn the centre line is radius + amplitude * sin(frequency * angle + phase) for
+-- each wave; it must clear the garages (tests/Racing.spec.luau checks it). limit = how far
+-- from the centre line a car may stray before the lap stops counting.
+Config.Track = {
+	radius = 175,
+	waves = { { 22, 3, 0.3 }, { 10, 5, 1.0 }, { 4, 8, 0.2 } },
+	halfWidth = 8,
+	limit = 13,
+}
+-- The race car (src/shared/DriveModel.luau). Speeds in studs per second; it gets faster
+-- every season. A clean lap pays lapRewardMinutes of income, a new best lap bestLapMinutes
+-- more, so driving pays a little while the factory keeps earning.
+Config.Drive = {
+	topSpeed = 65, perSeason = 5, maxTopSpeed = 95,
+	accel = 24, brake = 70, drag = 10, reverse = 16, turnRate = 1.2, grip = 6, offroadShare = 0.45,
+	lapRewardMinutes = 0.25, lapRewardFloor = 20, bestLapMinutes = 2,
+}
+Config.LapBoardName = "PitLaneTycoon_BestLap_v1"
+
 -- Leaderboard of factory earnings across all seasons (bought cash and rewards don't count).
 Config.LeaderboardName = "PitLaneTycoon_Earned_v1"
 Config.LeaderboardSize = 10

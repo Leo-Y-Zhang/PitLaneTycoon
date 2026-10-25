@@ -163,14 +163,19 @@ remotes:WaitForChild("Notify").OnClientEvent:Connect(showToast)
 -- buttons ---------------------------------------------------------------------------
 -- left edge, above the middle: clear of a phone's thumbstick (bottom left) and jump button
 local bar = new("Frame", {
-	AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.42, 0), Size = UDim2.fromOffset(150, 98),
+	AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.42, 0), Size = UDim2.fromOffset(150, 152),
 	BackgroundTransparency = 1,
 }, gui)
 new("UIListLayout", { FillDirection = Enum.FillDirection.Vertical, Padding = UDim.new(0, 10) }, bar)
 scaled(bar)
 local shopButton = button("Shop", RED, bar)
+local raceButton = button("Race", Color3.fromRGB(28, 86, 214), bar)
 local seasonButton = button("New season", Color3.fromRGB(200, 150, 20), bar)
 seasonButton.Visible = false
+-- the time trial: into your car on the grid, or back out to the garage
+raceButton.Activated:Connect(function()
+	remotes:WaitForChild("Drive"):FireServer(player:GetAttribute("Driving") ~= true)
+end)
 
 -- shop ------------------------------------------------------------------------------
 local shop = new("Frame", {
@@ -374,6 +379,7 @@ local function refreshAll()
 	refreshTop()
 	refreshGuide()
 	seasonButton.Visible = player:GetAttribute("HasTrophy") == true
+	raceButton.Text = player:GetAttribute("Driving") == true and "Leave car" or "Race"
 end
 player.AttributeChanged:Connect(refreshAll)
 workspace:GetAttributeChangedSignal("HappyHour"):Connect(refreshTop)
