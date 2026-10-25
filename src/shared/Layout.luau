@@ -35,6 +35,11 @@ function Layout.topBar(width: number, height: number, touch: boolean): (number, 
 	return centre, s
 end
 
+-- MUTANT (replaced before merge): today's behaviour, always centred
+function Layout.panel(width: number, height: number, panelWidth: number, touch: boolean): (number, number)
+	return width / 2, Layout.scale(width, height)
+end
+
 -- the bottom of the left-edge buttons, in pixels from the top
 function Layout.buttonsBottom(width: number, height: number): number
 	return height * Layout.ButtonBarCentre + Layout.ButtonBarHeight / 2 * Layout.scale(width, height)

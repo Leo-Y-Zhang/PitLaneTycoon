@@ -36,6 +36,32 @@ do -- computer windows, from a narrow one beside other windows to a wide monitor
 	check("on a wide screen it stays centred", centre == 960, centre)
 end
 
+do -- the centred panels (shop and new season 380 px wide, crew and welcome 440) on a computer
+	local clear, onScreen, readable, worst = true, true, true, nil
+	for width = 640, 2560, 40 do
+		for _, height in { 480, 720, 1080 } do
+			for _, panelWidth in { 380, 440 } do
+				local centre, s = Layout.panel(width, height, panelWidth, false)
+				local half = panelWidth / 2 * s
+				if centre + half > width - Layout.PlayerListWidth + 0.01 then
+					clear, worst = false, ("%dx%d, %d wide: right edge %.0f"):format(width, height, panelWidth, centre + half)
+				end
+				if centre - half < 0 then
+					onScreen, worst = false, ("%dx%d, %d wide: left edge %.0f"):format(width, height, panelWidth, centre - half)
+				end
+				readable = readable and s >= 0.5
+			end
+		end
+	end
+	check("on a computer the shop and crew panels stay clear of the player list", clear, worst)
+	check("and on the screen", onScreen, worst)
+	check("and never shrink below half size", readable)
+	local centre, s = Layout.panel(1920, 1080, 440, false)
+	check("on a wide screen they stay centred at full size", centre == 960 and s == 1, ("%s at %s"):format(centre, s))
+	local phone = Layout.panel(844, 390, 440, true)
+	check("on a phone they stay centred (the list is hidden there)", phone == 422, phone)
+end
+
 do -- phones and tablets held sideways
 	local centred, clearOfThumb, worst = true, true, nil
 	for _, size in { { 667, 375 }, { 740, 360 }, { 844, 390 }, { 926, 428 }, { 1024, 768 }, { 1180, 820 } } do
