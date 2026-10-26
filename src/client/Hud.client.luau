@@ -323,6 +323,11 @@ local function placeToasts(): boolean
 		end
 	end
 	local centre, scale, y, allowed = Layout.toasts(view.X, view.Y, insetTop.Y, insetBottom.Y, modalTops)
+	if not allowed then
+		-- no room above an open panel: never hide feedback, draw over its top edge instead
+		-- (the pills are opaque and layered above every panel)
+		centre, scale, y, allowed = Layout.toasts(view.X, view.Y, insetTop.Y, insetBottom.Y, {})
+	end
 	host.Position = UDim2.fromOffset(centre, y)
 	toastScale.Scale = scale
 	host.Visible = allowed
