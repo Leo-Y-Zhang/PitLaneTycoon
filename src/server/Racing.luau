@@ -13,6 +13,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local TrackShape = require(Shared:WaitForChild("TrackShape"))
 local LapTimer = require(script.Parent:WaitForChild("LapTimer"))
 local Scenery = require(script.Parent:WaitForChild("Scenery"))
+local Circuit = require(script.Parent:WaitForChild("Circuit"))
 
 local Racing = {}
 
@@ -273,6 +274,7 @@ function Racing.start(h: Host, remotes: Folder)
 	local _, outer = TrackShape.extent(Config.LongTrack)
 	Scenery.track(Config.Track, "Track", "TIME TRIAL", outer) -- the grass reaches past both circuits
 	Scenery.track(Config.LongTrack, "LongTrack", "ENDURANCE")
+	Circuit.build()
 	folder = Instance.new("Folder")
 	folder.Name = "RaceCars"
 	folder.Parent = workspace
