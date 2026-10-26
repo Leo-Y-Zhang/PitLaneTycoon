@@ -20,6 +20,8 @@ Scenery.Teams = {
 local CARBON = Color3.fromRGB(22, 24, 28)
 local WALL = Color3.fromRGB(214, 218, 224)
 local WHITE = Color3.fromRGB(240, 240, 240)
+local STEEL = Color3.fromRGB(150, 155, 162)
+local DARK_STEEL = Color3.fromRGB(40, 44, 50)
 
 local function block(parent: Instance, cf: CFrame, size: Vector3, colour: Color3, material: Enum.Material?): Part
 	local p = Instance.new("Part")
@@ -111,8 +113,7 @@ function Scenery.paddock(plotCount: number, plotRadius: number, frontGap: number
 	sign(title, Enum.NormalId.Front, "PIT LANE TYCOON", Color3.fromRGB(255, 205, 60))
 end
 
--- the fittings every plot has from the start: hazard stripes at the conveyor ends and its
--- side rails (plot-local frame: -Z faces the spawn)
+-- the conveyor fittings every plot has from the start (plot-local frame: -Z faces the spawn)
 function Scenery.garage(model: Instance, cf: CFrame)
 	local g = Instance.new("Folder")
 	g.Name = "Fittings"
@@ -126,10 +127,81 @@ function Scenery.garage(model: Instance, cf: CFrame)
 	for _, z in { -3.2, 3.2 } do -- conveyor side rails
 		block(g, cf * CFrame.new(0, 1.9, z), Vector3.new(48, 0.4, 0.4), Color3.fromRGB(150, 155, 162), Enum.Material.Metal)
 	end
+	-- skirts and roller ends sit below the belt surface
+	for _, side in { -1, 1 } do
+		block(g, cf * CFrame.new(0, 0.75, side * 3.06), Vector3.new(48, 1.4, 0.12), DARK_STEEL, Enum.Material.Metal)
+		for x = -22.5, 22.5, 3 do
+			local roller = block(g, cf * CFrame.new(x, 1.05, side * 3.13) * CFrame.Angles(0, math.rad(90), 0),
+				Vector3.new(0.14, 0.7, 0.7), Color3.fromRGB(190, 195, 205), Enum.Material.Metal)
+			roller.Shape = Enum.PartType.Cylinder
+			roller.CastShadow = false
+		end
+		for x = -21, 21, 6 do
+			local post = block(g, cf * CFrame.new(x, 1.7, side * 3.2), Vector3.new(0.14, 0.4, 0.14), STEEL, Enum.Material.Metal)
+			post.CastShadow = false
+		end
+	end
+	for _, x in { -24.1, 24.1 } do
+		local roller = block(g, cf * CFrame.new(x, 1, 0) * CFrame.Angles(0, math.rad(90), 0),
+			Vector3.new(6.1, 1, 1), DARK_STEEL, Enum.Material.Metal)
+		roller.Shape = Enum.PartType.Cylinder
+	end
+end
+
+-- a lit upgrade arch; the touch curtain is made by the tycoon
+function Scenery.gateArch(parent: Instance, cf: CFrame, colour: Color3, key: string)
+	for _, z in { -3.9, 3.9 } do
+		local post = block(parent, cf * CFrame.new(0, 4.3, z), Vector3.new(0.6, 6.6, 0.6), DARK_STEEL, Enum.Material.Metal)
+		post.Name = key .. "_post"
+		block(parent, cf * CFrame.new(0, 0.15, z), Vector3.new(0.9, 0.3, 0.9), DARK_STEEL, Enum.Material.Metal)
+		for _, band in {
+			{ y = 1.2, colour = Color3.fromRGB(250, 205, 40) },
+			{ y = 1.55, colour = CARBON },
+		} do
+			block(parent, cf * CFrame.new(0, band.y, z), Vector3.new(0.68, 0.3, 0.68), band.colour, Enum.Material.Metal)
+		end
+		local scanner = block(parent, cf * CFrame.new(0, 5.6, math.sign(z) * 3.475),
+			Vector3.new(0.25, 0.4, 0.25), colour, Enum.Material.Neon)
+		scanner.CastShadow = false
+	end
+	local beam = block(parent, cf * CFrame.new(0, 7.9, 0), Vector3.new(0.9, 0.6, 8.4), colour)
+	beam.Name = key .. "_beam"
+	local strip = block(parent, cf * CFrame.new(0, 7.55, 0), Vector3.new(0.3, 0.12, 7.4), colour, Enum.Material.Neon)
+	local light = Instance.new("SurfaceLight")
+	light.Face = Enum.NormalId.Bottom
+	light.Brightness, light.Range, light.Angle = 1.2, 10, 70
+	light.Color = colour
+	light.Parent = strip
+end
+
+-- walls and a sign frame around the scanner, clear of the intake and collection pad
+function Scenery.collectorBin(model: Instance, cf: CFrame, colour: Color3)
+	local g = Instance.new("Folder")
+	g.Name = "CollectorBin"
+	g.Parent = model
+	block(g, cf * CFrame.new(2.15, 1.8, 0), Vector3.new(0.3, 3.6, 8.6), DARK_STEEL, Enum.Material.Metal)
+	block(g, cf * CFrame.new(2.15, 3.7, 0), Vector3.new(0.3, 0.2, 8.6), colour, Enum.Material.Metal)
+	for _, z in { -4.15, 4.15 } do
+		block(g, cf * CFrame.new(0.15, 1.8, z), Vector3.new(4.3, 3.6, 0.3), DARK_STEEL, Enum.Material.Metal)
+		block(g, cf * CFrame.new(0.15, 3.7, z), Vector3.new(4.3, 0.2, 0.3), colour, Enum.Material.Metal)
+	end
+	for _, z in { -4.6, 4.6 } do
+		for _, x in { -1.4, 1.8 } do
+			block(g, cf * CFrame.new(x, 3.25, z), Vector3.new(0.4, 6.5, 0.4), DARK_STEEL, Enum.Material.Metal)
+		end
+		block(g, cf * CFrame.new(0.2, 6.6, z), Vector3.new(3.8, 0.4, 0.4), DARK_STEEL, Enum.Material.Metal)
+	end
+	local board = block(g, cf * CFrame.new(0, 7.4, -4.6), Vector3.new(3.8, 1.2, 0.3), CARBON, Enum.Material.Metal)
+	sign(board, Enum.NormalId.Front, "SCRUTINEERING", WHITE)
+	sign(board, Enum.NormalId.Back, "SCRUTINEERING", WHITE)
+	for _, x in { -1.4, 1.8 } do
+		local lamp = block(g, cf * CFrame.new(x, 5.8, -4.85), Vector3.new(0.25, 0.4, 0.1),
+			Color3.fromRGB(0, 255, 110), Enum.Material.Neon)
+		lamp.CastShadow = false
+	end
 end
 
 local ORANGE = Color3.fromRGB(255, 120, 20)
-local STEEL = Color3.fromRGB(150, 155, 162)
 local CONCRETE = Color3.fromRGB(196, 200, 206)
 local GRAPHITE = Color3.fromRGB(44, 48, 56)
 
