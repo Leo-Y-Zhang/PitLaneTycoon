@@ -199,7 +199,7 @@ local function photoShoot()
 	cam.FieldOfView = 55
 	local shots = {
 		{ "hero", base * CFrame.new(-22, 15, -38), base * CFrame.new(2, 3, 8) },
-		{ "car", base * CFrame.new(-12, 6, 4), base * CFrame.new(2.5, 1.4, 15) },
+		{ "car", base * CFrame.new(-5, 5, 7.5), base * CFrame.new(2.5, 1.4, 15) }, -- inside the press line, clear of its posts
 		{ "line", base * CFrame.new(-22, 6, -12), base * CFrame.new(12, 2.5, 2) },
 		{ "paddock", base * CFrame.new(0, 48, -100), base * CFrame.new(0, 2, -10) },
 	}
