@@ -55,6 +55,9 @@ local function sign(part: BasePart, face: Enum.NormalId, text: string, colour: C
 	t.Parent = gui
 end
 
+Scenery.block = block
+Scenery.sign = sign
+
 function Scenery.lighting()
 	Lighting.Ambient = Color3.fromRGB(70, 74, 82)
 	Lighting.OutdoorAmbient = Color3.fromRGB(128, 132, 140)
@@ -111,6 +114,134 @@ function Scenery.paddock(plotCount: number, plotRadius: number, frontGap: number
 	local title = block(folder, CFrame.new(0, 16, -14), Vector3.new(30, 4, 1.2), CARBON, Enum.Material.Metal)
 	sign(title, Enum.NormalId.Back, "PIT LANE TYCOON", Color3.fromRGB(255, 205, 60))
 	sign(title, Enum.NormalId.Front, "PIT LANE TYCOON", Color3.fromRGB(255, 205, 60))
+	-- Props live in the wedges, with clearance measured to their whole footprint.
+	local PaddockLayout = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("PaddockLayout"))
+	local props = Instance.new("Folder")
+	props.Name = "Props"
+	props.Parent = folder
+	for _, placement in PaddockLayout.generate(plotCount, plotRadius, frontGap) do
+		local m = Instance.new("Model")
+		m.Name = placement.kind
+		local cf = CFrame.new(placement.x, 0, placement.z) * CFrame.Angles(0, placement.yaw, 0)
+		local angle = math.atan2(placement.z, placement.x) % (math.pi * 2)
+		local team = Scenery.Teams[math.floor(angle / (math.pi * 2) * plotCount) % #Scenery.Teams + 1]
+		local partCount = 0
+		local function p(x: number, y: number, z: number, sx: number, sy: number, sz: number, c: Color3, mat: Enum.Material?): Part
+			local part = block(m, cf * CFrame.new(x, y, z), Vector3.new(sx, sy, sz), c, mat)
+			part.CastShadow = math.max(sx, sy, sz) >= 2
+			partCount += 1
+			return part
+		end
+		local function cylinder(x: number, y: number, z: number, height: number, diameter: number, c: Color3, mat: Enum.Material?): Part
+			local part = p(x, y, z, height, diameter, diameter, c, mat)
+			part.Shape = Enum.PartType.Cylinder
+			part.CFrame *= CFrame.Angles(0, 0, math.pi / 2)
+			return part
+		end
+		if placement.kind == "tent" then
+			for _, side in { -1, 1 } do
+				local roof = p(side * 3.05, 8.05, 0, 6.4, 0.22, 9.4,
+					if side == -1 then team.colour else WHITE, Enum.Material.Fabric)
+				roof.CFrame *= CFrame.Angles(0, 0, -side * 0.22)
+				for _, z in { -4.2, 4.2 } do
+					p(side * 5.6, 3.65, z, 0.18, 7.3, 0.18, STEEL, Enum.Material.Metal)
+					p(side * 5.6, 0.1, z, 0.7, 0.2, 0.7, DARK_STEEL, Enum.Material.Metal)
+				end
+			end
+			for _, z in { -4.6, 4.6 } do
+				local valance = p(0, 7.25, z, 12.4, 0.65, 0.15, team.colour, Enum.Material.Fabric)
+				sign(valance, if z < 0 then Enum.NormalId.Front else Enum.NormalId.Back, "PADDOCK CLUB", WHITE)
+			end
+			p(0, 8.72, 0, 0.16, 0.16, 9.4, STEEL, Enum.Material.Metal)
+			for _, x in { -3.5, 0, 3.5 } do
+				cylinder(x, 2.45, 0.5, 0.18, 2.5, WHITE, Enum.Material.SmoothPlastic)
+				cylinder(x, 1.2, 0.5, 2.4, 0.16, STEEL, Enum.Material.Metal)
+				cylinder(x, 0.12, 0.5, 0.2, 1.2, DARK_STEEL, Enum.Material.Metal)
+			end
+		elseif placement.kind == "flag" then
+			p(0, 0.15, 0, 1.8, 0.3, 1.8, DARK_STEEL, Enum.Material.Metal)
+			cylinder(0, 0.6, 0, 0.9, 0.4, STEEL, Enum.Material.Metal)
+			cylinder(0, 5.8, 0, 11, 0.14, STEEL, Enum.Material.Metal)
+			p(1.25, 10.8, 0, 2.6, 0.1, 0.1, STEEL, Enum.Material.Metal)
+			local flag = p(1.25, 9.6, 0, 2.5, 2.3, 0.06, team.colour, Enum.Material.Fabric)
+			sign(flag, Enum.NormalId.Front, string.upper(team.name), WHITE)
+			cylinder(0, 11.4, 0, 0.16, 0.3, WHITE, Enum.Material.Metal)
+		elseif placement.kind == "tyres" then
+			p(0, 0.55, 0, 2.6, 0.2, 3.3, team.colour, Enum.Material.Metal)
+			for _, x in { -1.25, 1.25 } do
+				for _, z in { -1.25, 1.25 } do
+					local wheel = p(x, 0.28, z, 0.25, 0.55, 0.55, CARBON, Enum.Material.Rubber)
+					wheel.Shape = Enum.PartType.Cylinder
+				end
+				p(x, 1.4, 1.45, 0.12, 1.8, 0.12, STEEL, Enum.Material.Metal)
+			end
+			p(0, 2.3, 1.45, 2.6, 0.14, 0.14, CARBON, Enum.Material.Metal)
+			for level = 0, 2 do
+				local y = 1.03 + level * 0.78
+				cylinder(0, y, -0.2, 0.74, 2.25, CARBON, Enum.Material.Rubber)
+				cylinder(0, y + 0.38, -0.2, 0.035, 1.35, DARK_STEEL, Enum.Material.Metal)
+				p(0, y, -1.325, 0.45, 0.12, 0.025, Color3.fromRGB(245, 204, 55))
+			end
+		elseif placement.kind == "fuel" then
+			p(0, 0.16, 0, 3.6, 0.32, 3.4, DARK_STEEL, Enum.Material.Metal)
+			cylinder(-0.65, 2.1, 0.25, 3.5, 1.7, STEEL, Enum.Material.Metal)
+			for _, y in { 0.9, 3.25 } do
+				cylinder(-0.65, y, 0.25, 0.16, 1.78, team.colour, Enum.Material.Metal)
+			end
+			cylinder(-0.65, 3.95, 0.25, 0.24, 0.6, DARK_STEEL, Enum.Material.Metal)
+			p(1.25, 2.9, 0.9, 0.14, 5.4, 0.14, STEEL, Enum.Material.Metal)
+			p(0.15, 5.55, 0.9, 2.3, 0.16, 0.16, STEEL, Enum.Material.Metal)
+			p(-0.95, 4.95, 0.9, 0.15, 1.2, 0.15, CARBON, Enum.Material.Rubber)
+			p(-0.95, 4.4, 0.25, 0.15, 0.15, 1.4, CARBON, Enum.Material.Rubber)
+			p(-0.95, 3.65, -0.4, 0.15, 1.5, 0.15, CARBON, Enum.Material.Rubber)
+			p(-0.65, 2.95, -0.4, 0.7, 0.2, 0.2, team.colour, Enum.Material.Metal)
+			local controls = p(0.7, 2.35, -0.3, 1.05, 1.4, 0.65, team.colour, Enum.Material.Metal)
+			sign(controls, Enum.NormalId.Front, "FUEL", WHITE)
+			p(0.7, 2.65, -0.64, 0.65, 0.32, 0.035, Color3.fromRGB(124, 224, 184), Enum.Material.Neon)
+			p(0.7, 2.12, -0.65, 0.16, 0.16, 0.06, Color3.fromRGB(220, 54, 47))
+			p(0.7, 1.15, -0.3, 0.25, 1.8, 0.25, STEEL, Enum.Material.Metal)
+		elseif placement.kind == "barrier" then
+			for _, x in { -2.6, 2.6 } do
+				p(x, 0.12, 0, 1.1, 0.24, 1.5, DARK_STEEL, Enum.Material.Metal)
+				p(x, 1.4, 0, 0.14, 2.6, 0.14, STEEL, Enum.Material.Metal)
+			end
+			for _, y in { 0.65, 2.65 } do
+				p(0, y, 0, 5.4, 0.14, 0.14, STEEL, Enum.Material.Metal)
+			end
+			for x = -2, 2 do
+				p(x, 1.65, 0, 0.09, 1.9, 0.09, STEEL, Enum.Material.Metal)
+			end
+		elseif placement.kind == "planter" then
+			p(0, 0.65, 0, 3, 1.3, 2, DARK_STEEL, Enum.Material.Metal)
+			p(0, 1.3, 0, 3.2, 0.16, 2.2, team.colour, Enum.Material.Metal)
+			for k = -1, 1 do
+				local leaf = p(k * 0.75, 1.85, 0, 1.35, 1.6, 1.35,
+					Color3.fromRGB(48 + (k + 1) * 8, 116 + (k + 1) * 12, 64), Enum.Material.Grass)
+				leaf.Shape = Enum.PartType.Ball
+			end
+		elseif placement.kind == "tower" then
+			p(0, 0.2, 0, 3, 0.4, 3, DARK_STEEL, Enum.Material.Metal)
+			p(0, 7.5, 0, 0.45, 15, 0.45, STEEL, Enum.Material.Metal)
+			p(0, 14.6, 0, 6, 0.24, 0.24, DARK_STEEL, Enum.Material.Metal)
+			for _, side in { -1, 1 } do
+				local brace = p(side * 0.75, 1.1, 0, 0.12, 2.3, 0.12, STEEL, Enum.Material.Metal)
+				brace.CFrame *= CFrame.Angles(0, 0, -side * 0.65)
+			end
+			for _, x in { -2.2, 0, 2.2 } do
+				p(x, 14.4, -0.15, 1.5, 0.65, 0.9, CARBON, Enum.Material.Metal)
+				local lamp = p(x, 14.06, -0.15, 1.25, 0.06, 0.7, Color3.fromRGB(255, 237, 201), Enum.Material.Neon)
+				if x == 0 then
+					local light = Instance.new("SurfaceLight")
+					light.Face = Enum.NormalId.Bottom
+					light.Color = lamp.Color
+					light.Brightness, light.Range, light.Angle = 1.5, 32, 110
+					light.Parent = lamp
+				end
+			end
+		end
+		assert(partCount <= PaddockLayout.Specs[placement.kind].parts, "Paddock prop exceeded its part allowance")
+		m.Parent = props
+	end
 end
 
 -- the conveyor fittings every plot has from the start (plot-local frame: -Z faces the spawn)
@@ -564,18 +695,89 @@ end
 function Scenery.shelf(parent: Instance, cf: CFrame, gold: number, rainbow: number): Model
 	local m = Instance.new("Model")
 	m.Name = "Shelf"
-	local plinth = block(m, cf * CFrame.new(0, 0.5, 0), Vector3.new(9, 1, 1.8), CARBON, Enum.Material.Metal)
-	local case = block(m, cf * CFrame.new(0, 2.5, 0), Vector3.new(9, 3, 1.8), Color3.fromRGB(190, 220, 240), Enum.Material.Glass)
-	case.Transparency = 0.7
-	for i = 1, math.min(gold, 6) do
-		block(m, cf * CFrame.new(-3.75 + (i - 1) * 1.5, 1.35, 0), Vector3.new(1, 0.45, 0.6), Color3.fromRGB(255, 196, 40), Enum.Material.Neon)
+	local warm = Color3.fromRGB(255, 218, 150)
+	local goldColour = Color3.fromRGB(232, 180, 54)
+	local function p(x: number, y: number, z: number, sx: number, sy: number, sz: number, c: Color3, mat: Enum.Material?): Part
+		local part = block(m, cf * CFrame.new(x, y, z), Vector3.new(sx, sy, sz), c, mat)
+		part.CastShadow = false
+		return part
 	end
-	for i = 1, math.min(rainbow, 6) do
-		local gem = block(m, cf * CFrame.new(-3.75 + (i - 1) * 1.5, 2.6, 0), Vector3.new(0.75, 0.75, 0.75),
-			Color3.fromRGB(255, 70, 210), Enum.Material.Neon)
-		gem.Shape = Enum.PartType.Ball
+	local base = p(0, 0.4, 0, 9, 0.8, 1.8, CARBON, Enum.Material.Metal)
+	sign(base, Enum.NormalId.Front, ("%d GOLD  %d RAINBOW"):format(gold, rainbow), warm)
+	local header = p(0, 5.05, 0, 9, 0.7, 1.8, CARBON, Enum.Material.Metal)
+	sign(header, Enum.NormalId.Front, "RARE PARTS", warm)
+	p(0, 2.75, 0.82, 8.6, 3.9, 0.12, DARK_STEEL, Enum.Material.Metal)
+	for _, x in { -4.35, 4.35 } do
+		for _, z in { -0.76, 0.76 } do
+			p(x, 2.75, z, 0.3, 3.9, 0.28, DARK_STEEL, Enum.Material.Metal)
+		end
 	end
-	sign(plinth, Enum.NormalId.Front, ("RARE PARTS  %d GOLD  %d RAINBOW"):format(gold, rainbow), Color3.fromRGB(255, 205, 60))
+	for _, y in { 1, 2.95 } do
+		p(0, y, 0, 8.5, 0.12, 1.5, STEEL, Enum.Material.Metal)
+	end
+	for _, y in { 2.83, 4.64 } do
+		local strip = p(0, y, -0.48, 8.1, 0.06, 0.12, warm, Enum.Material.Neon)
+		if y > 4 then
+			local light = Instance.new("PointLight")
+			light.Color = warm
+			light.Brightness, light.Range = 0.7, 7
+			light.Shadows = false
+			light.Parent = strip
+		end
+	end
+	local glass = p(0, 2.75, -0.84, 8.4, 3.9, 0.06, Color3.fromRGB(205, 226, 235), Enum.Material.Glass)
+	glass.Transparency = 0.86
+	glass.Reflectance = 0.04
+	local colours = {
+		Color3.fromRGB(240, 65, 70), Color3.fromRGB(255, 149, 48), Color3.fromRGB(255, 218, 65),
+		Color3.fromRGB(65, 206, 123), Color3.fromRGB(55, 155, 242), Color3.fromRGB(168, 91, 235),
+	}
+	for level = 1, 2 do
+		local deck = if level == 1 then 1.06 else 3.01
+		local count = if level == 1 then rainbow else gold
+		for slot = 1, 6 do
+			local x = -3.5 + (slot - 1) * 1.4
+			if slot > math.clamp(math.floor(count), 0, 6) then
+				-- Four faint edges mark an unfilled slot without pretending it holds a trophy.
+				for _, side in { -1, 1 } do
+					p(x + side * 0.57, deck + 0.035, 0, 0.035, 0.04, 0.9, STEEL, Enum.Material.Metal).Transparency = 0.65
+					p(x, deck + 0.035, side * 0.43, 1.14, 0.04, 0.035, STEEL, Enum.Material.Metal).Transparency = 0.65
+				end
+			else
+				p(x, deck + 0.07, 0, 1.18, 0.14, 1, CARBON, Enum.Material.Metal)
+				p(x, deck + 0.22, 0.12, 0.2, 0.2, 0.35, STEEL, Enum.Material.Metal)
+				if level == 2 then
+					local y = deck + 0.88
+					local rim = p(x, y, 0.05, 0.22, 1.08, 1.08, goldColour, Enum.Material.Metal)
+					rim.Shape = Enum.PartType.Cylinder
+					rim.CFrame *= CFrame.Angles(0, math.pi / 2, 0)
+					local recess = p(x, y, -0.01, 0.24, 0.82, 0.82, CARBON, Enum.Material.Metal)
+					recess.Shape = Enum.PartType.Cylinder
+					recess.CFrame *= CFrame.Angles(0, math.pi / 2, 0)
+					for spoke = 0, 3 do
+						local a = spoke / 4 * math.pi * 2 + math.pi / 4
+						local bar = p(x + math.cos(a) * 0.24, y + math.sin(a) * 0.24, -0.17,
+							0.45, 0.1, 0.07, goldColour, Enum.Material.Metal)
+						bar.CFrame *= CFrame.Angles(0, 0, a)
+					end
+					local hub = p(x, y, -0.2, 0.12, 0.24, 0.24, goldColour, Enum.Material.Foil)
+					hub.Shape = Enum.PartType.Cylinder
+					hub.CFrame *= CFrame.Angles(0, math.pi / 2, 0)
+				else
+					-- Six staggered aero elements with upright endplates make a miniature front wing.
+					for layer, colour in colours do
+						p(x, deck + 0.37 + (layer - 1) * 0.1, 0.18 - (layer - 1) * 0.065,
+							1.06, 0.065, 0.45, colour, Enum.Material.Metal)
+					end
+					for _, side in { -1, 1 } do
+						p(x + side * 0.56, deck + 0.6, 0.02, 0.06, 0.7, 0.82,
+							if side == -1 then colours[1] else colours[6], Enum.Material.Metal)
+					end
+				end
+			end
+		end
+	end
+	-- Full case: 126 Parts; empty positions use fewer Parts than an occupied plinth.
 	m.Parent = parent
 	return m
 end
