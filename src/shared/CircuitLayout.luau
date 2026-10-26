@@ -122,11 +122,21 @@ function CircuitLayout.generate(shapes: { Shape }, plotCount: number, plotRadius
 		if p.kind ~= "hill" and math.max(math.abs(p.x), math.abs(p.z)) + p.radius > layout.grassHalfSize - 3 then
 			return false
 		end
+		local tall = p.kind == "grandstand" or p.kind == "treeCluster" or p.kind == "billboard"
+			or p.kind == "marshalPost" or p.kind == "floodlight"
 		for index, line in lines do
+			-- Keep the full footprint out of both start areas, including landscape trees.
+			local start = line[1]
+			if tall and (p.x - start.x) ^ 2 + (p.z - start.z) ^ 2 < (35 + p.radius) ^ 2 then
+				return false
+			end
 			-- A stud of extra margin covers the tiny error between chords and the true curve.
 			local clearance = shapes[index].halfWidth + 6 + p.radius + 1
 			for i, a in line do
-				if segmentDistance2(p.x, p.z, a, line[i % #line + 1]) < clearance * clearance then
+				-- Segment i starts at (i - 1) / #line; include both ends of the lap.
+				local approach = i <= #line * 0.1 or i > #line * 0.9
+				local limit = if tall and approach then math.max(clearance, 25 + p.radius + 1) else clearance
+				if segmentDistance2(p.x, p.z, a, line[i % #line + 1]) < limit * limit then
 					return false
 				end
 			end

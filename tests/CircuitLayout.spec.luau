@@ -53,6 +53,41 @@ local function clearance(layout: CircuitLayout.Layout, tracks: { TrackShape.Shap
 	return roads, paddock, worst
 end
 
+-- Check full footprints with independent, denser TrackShape samples. Landscape trees must
+-- clear both tracks too, regardless of a placement's track/angle metadata. Hills are low.
+local function startClearance(layout: CircuitLayout.Layout, shape: TrackShape.Shape): (number, number, string, string)
+	local starts, approaches = 0, 0
+	local startDetail, approachDetail = "", ""
+	local x, z = TrackShape.point(shape, 0)
+	local samples = TrackShape.samples(shape, 4000)
+	for _, p in layout.placements do
+		if p.kind == "floodlight" or p.kind == "grandstand" or p.kind == "billboard"
+			or p.kind == "marshalPost" or p.kind == "treeCluster" then
+			if (p.x - x) ^ 2 + (p.z - z) ^ 2 < (35 + p.radius) ^ 2 then
+				starts += 1
+				startDetail = p.kind .. " inside start clearance"
+			end
+			for _, q in samples do
+				if (q.a <= 0.1 * TAU or q.a >= 0.9 * TAU)
+					and (p.x - q.x) ^ 2 + (p.z - q.z) ^ 2 < (25 + p.radius) ^ 2 then
+					approaches += 1
+					approachDetail = p.kind .. " inside approach clearance"
+					break
+				end
+			end
+		end
+	end
+	return starts, approaches, startDetail, approachDetail
+end
+
+do
+	for index, shape in shapes do
+		local starts, approaches, startDetail, approachDetail = startClearance(plan, shape)
+		check("tall footprints stay 35 studs from circuit " .. index .. " start/finish", starts == 0, startDetail)
+		check("tall footprints stay 25 studs from circuit " .. index .. " first/last 10%", approaches == 0, approachDetail)
+	end
+end
+
 do
 	local roads, paddock, worst = clearance(plan, shapes, Config.PlotRadius)
 	check("every footprint clears BOTH centrelines by halfWidth + 6", roads, worst)
@@ -174,10 +209,16 @@ end
 
 do
 	local safe, budget, allHills = true, true, true
+	local startsClear, approachesClear = true, true
 	for _, seed in { 1, 42, 2026, 2147483646 } do
 		local alternate = CircuitLayout.generate(shapes, Config.PlotCount, Config.PlotRadius, seed)
 		local roads, paddock = clearance(alternate, shapes, Config.PlotRadius)
 		safe = safe and roads and paddock
+		for _, shape in shapes do
+			local starts, approaches = startClearance(alternate, shape)
+			startsClear = startsClear and starts == 0
+			approachesClear = approachesClear and approaches == 0
+		end
 		budget = budget and alternate.partCount <= 1800
 		local hills = 0
 		for _, p in alternate.placements do
@@ -186,6 +227,8 @@ do
 		allHills = allHills and hills == 60
 	end
 	check("clearance holds across four additional seeds", safe)
+	check("start circles stay clear across four additional seeds", startsClear)
+	check("start approaches stay clear across four additional seeds", approachesClear)
 	check("the budget holds across four additional seeds", budget)
 	check("every seed covers all four slab edges with hills", allHills)
 	local wider: { TrackShape.Shape } = {
@@ -196,6 +239,14 @@ do
 	local roads, paddock = clearance(alternate, wider, 110)
 	check("wider roads and a larger plot ring also preserve clearance", roads and paddock)
 	check("a changed plot ring and road widths preserve the budget", alternate.partCount <= 1800)
+	startsClear, approachesClear = true, true
+	for _, shape in wider do
+		local starts, approaches = startClearance(alternate, shape)
+		startsClear = startsClear and starts == 0
+		approachesClear = approachesClear and approaches == 0
+	end
+	check("wider roads and a larger plot ring keep start circles clear", startsClear)
+	check("wider roads and a larger plot ring keep start approaches clear", approachesClear)
 end
 
 print(("%d passed, %d failed"):format(passed, failed))
