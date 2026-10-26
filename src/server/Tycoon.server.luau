@@ -494,14 +494,7 @@ end
 -- part that counts), so six gates in a row read as six gates rather than one glowing wall
 local function spawnUpgrade(player: Player, item)
 	local plot = states[player].plot
-	for _, z in { -3.9, 3.9 } do
-		part({ Name = item.key .. "_post", Size = Vector3.new(0.6, 6.6, 0.6), Color = Color3.fromRGB(40, 44, 50),
-			Material = Enum.Material.Metal, CanCollide = false, CanTouch = false, CFrame = at(plot, item.x, 4.3, z),
-			Parent = plot.items })
-	end
-	part({ Name = item.key .. "_beam", Size = Vector3.new(0.9, 0.6, 8.4), Color = plot.team.colour,
-		Material = Enum.Material.SmoothPlastic, CanCollide = false, CanTouch = false, CFrame = at(plot, item.x, 7.9, 0),
-		Parent = plot.items })
+	Scenery.gateArch(plot.items, at(plot, item.x, 0, 0), plot.team.colour, item.key)
 	local gate = part({
 		Name = item.key, Size = Vector3.new(1, 5.6, 7.2), Color = Color3.fromRGB(255, 170, 0),
 		Material = Enum.Material.Neon, Transparency = 0.78, CanCollide = false,
@@ -807,8 +800,9 @@ local function makePlot(index: number)
 	plot.conveyor = part({ Name = "Conveyor", Size = Vector3.new(48, 1, 6), CFrame = at(plot, 0, 1, 0),
 		Color = Color3.fromRGB(30, 30, 30), Material = Enum.Material.DiamondPlate, Parent = model })
 	local collector = part({ Name = "Scrutineering", Size = Vector3.new(4, 3, 8), CFrame = at(plot, 26, 1.5, 0),
-		Color = Color3.fromRGB(0, 170, 110), Material = Enum.Material.Neon, Parent = model })
+		Color = Color3.fromRGB(0, 170, 110), Material = Enum.Material.Neon, Transparency = 0.35, Parent = model })
 	label(collector, "Scrutineering", 3, Vector2.new(5.5, 1.4))
+	Scenery.collectorBin(model, at(plot, 26, 0, 0), plot.team.colour)
 	local collectPad = part({ Name = "CollectPad", Size = Vector3.new(6, 0.4, 6), CFrame = at(plot, 26, 0.2, 12),
 		Color = Color3.fromRGB(0, 120, 255), Material = Enum.Material.Neon, Parent = model })
 	plot.pendingLabel = label(collectPad, "Collect $0", 3)
