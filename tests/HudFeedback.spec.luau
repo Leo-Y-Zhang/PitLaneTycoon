@@ -79,6 +79,40 @@ do
 	check("the queue stays bounded while draining", bounded and #q.visible == 0 and #q.pending == 0)
 end
 
+do -- an obstructing modal holds both pending and already visible messages
+	local q = Feedback.newQueue()
+	Feedback.enqueue(q, "waiting", 0, true)
+	Feedback.advance(q, 100, true)
+	check("a blocked stack never promotes pending toasts", #q.visible == 0 and #q.pending == 1)
+	Feedback.advance(q, 100)
+	check("closing a modal promotes held messages with a full lifetime", #q.visible == 1 and q.visible[1].expiresAt == 103)
+	Feedback.advance(q, 101, true)
+	Feedback.enqueue(q, "next", 150, true)
+	Feedback.advance(q, 200, true)
+	check("opening a modal preserves visible messages without expiry", #q.visible == 1 and q.visible[1].text == "waiting")
+	check("notifications arriving while held stay pending", #q.pending == 1 and q.pending[1].text == "next")
+	Feedback.advance(q, 201)
+	check("resuming preserves the remaining visible lifetime", #q.visible == 2 and q.visible[1].expiresAt == 203)
+	check("new messages still receive their full lifetime on resume", q.visible[2] ~= nil and q.visible[2].expiresAt == 204)
+	Feedback.advance(q, 203)
+	check("resumed messages expire in order", #q.visible == 1 and q.visible[1].text == "next")
+	Feedback.advance(q, 204)
+	check("a resumed queue drains normally", #q.visible == 0 and #q.pending == 0)
+end
+
+do
+	local q = Feedback.newQueue()
+	for i = 1, 100 do Feedback.enqueue(q, tostring(i), i, true) end
+	check("a long modal keeps the waiting queue bounded", #q.visible == 0 and #q.pending == Feedback.PendingLimit)
+	Feedback.advance(q, 101)
+	check("a held burst resumes at most three in FIFO order", #q.visible == 3 and q.visible[1].text == "89" and q.visible[3].text == "91")
+	Feedback.advance(q, 101.5, true)
+	Feedback.advance(q, 102, true)
+	Feedback.advance(q, 103)
+	Feedback.advance(q, 103)
+	check("repeated hold and release ticks do not extend expiry twice", q.visible[1] ~= nil and q.visible[1].expiresAt == 105.5)
+end
+
 local items: { Feedback.ProgressItem } = {}
 for _, item in Config.Items do table.insert(items, { key = item.key, season = item.season }) end
 do

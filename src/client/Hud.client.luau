@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local MarketplaceService = game:GetService("MarketplaceService")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
+local GuiService = game:GetService("GuiService")
 
 local UserInputService = game:GetService("UserInputService")
 
@@ -80,7 +81,8 @@ local function button(text: string, color: Color3, parent: Instance): TextButton
 	return b
 end
 
-local gui = new("ScreenGui", { Name = "PitLaneHud", ResetOnSpawn = false, IgnoreGuiInset = false }, player:WaitForChild("PlayerGui"))
+local gui = new("ScreenGui", { Name = "PitLaneHud", ResetOnSpawn = false, IgnoreGuiInset = false,
+	DisplayOrder = 10, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, player:WaitForChild("PlayerGui"))
 
 -- every panel is laid out for a laptop and shrinks on a phone held sideways
 local scales: { UIScale } = {}
@@ -89,13 +91,21 @@ local function scaled(o: GuiObject)
 end
 -- the panels that open in the middle: on a computer they keep clear of the player list
 local panels: { { frame: GuiObject, width: number, scale: UIScale } } = {}
+local renderToasts: () -> () = function() end
+local modalFrames: { GuiObject } = {}
+local function watchModal(o: GuiObject)
+	table.insert(modalFrames, o)
+	-- Respond to harness toggles and geometry changes as well as button clicks.
+	for _, property in { "Visible", "AbsolutePosition", "AbsoluteSize" } do
+		o:GetPropertyChangedSignal(property):Connect(function() renderToasts() end)
+	end
+end
 local function centred(o: GuiObject)
 	table.insert(panels, { frame = o, width = o.Size.X.Offset, scale = new("UIScale", {}, o) })
+	watchModal(o)
 end
 local topScale: UIScale? = nil
 local topFrame: Frame? = nil
-local toastHost: Frame? = nil
-local toastScale: UIScale? = nil
 local eventVisible = false
 local function rescale()
 	local view = workspace.CurrentCamera.ViewportSize
@@ -115,11 +125,7 @@ local function rescale()
 		topFrame.Position = UDim2.fromOffset(centre, 10)
 		topScale.Scale = barScale
 	end
-	if toastHost and toastScale then
-		local centre, scale, y = Layout.toasts(view.X, view.Y, phone, eventVisible)
-		toastHost.Position = UDim2.fromOffset(centre, y)
-		toastScale.Scale = scale
-	end
+	renderToasts()
 end
 
 -- top bar: cash, income, waiting at the pad, and the next purchase -------------------
@@ -283,25 +289,51 @@ end
 -- Three reusable cards, with a bounded FIFO waiting behind them.
 local toastQueue = Feedback.newQueue()
 local host = new("Frame", {
-	Name = "Toasts", AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(360, 108),
-	BackgroundTransparency = 1, ZIndex = 10,
+	Name = "Toasts", AnchorPoint = Vector2.new(0.5, 0),
+	Size = UDim2.fromOffset(Layout.ToastWidth, Layout.ToastStackHeight),
+	BackgroundTransparency = 1, Visible = false, ZIndex = 100,
 }, gui)
-toastHost = host
-toastScale = new("UIScale", {}, host)
+local toastScale = new("UIScale", {}, host)
+new("UIListLayout", {
+	Padding = UDim.new(0, Layout.ToastGap), SortOrder = Enum.SortOrder.LayoutOrder,
+}, host)
 local toastCards: { { label: TextLabel, id: number } } = {}
 for _ = 1, Feedback.ToastLimit do
 	local label = new("TextLabel", {
-		Size = UDim2.fromOffset(360, 32), BackgroundColor3 = PANEL, BackgroundTransparency = 0.08,
-		TextColor3 = INK, Font = Enum.Font.GothamBold, TextScaled = true, Text = "", Visible = false, ZIndex = 11,
+		Size = UDim2.fromOffset(Layout.ToastWidth, Layout.ToastHeight), BackgroundColor3 = PANEL, BackgroundTransparency = 0,
+		TextColor3 = INK, Font = Enum.Font.GothamBold, TextScaled = true, Text = "", Visible = false, ZIndex = 101,
+		TextTruncate = Enum.TextTruncate.AtEnd,
 	}, host)
-	round(label, 8)
-	new("UIStroke", { Color = GREEN, Thickness = 1 }, label)
+	round(label, 16)
+	new("UIStroke", { Color = GREEN, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, label)
 	new("UITextSizeConstraint", { MaxTextSize = 16 }, label)
-	new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, label)
+	new("UIPadding", {
+		PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10),
+		PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4),
+	}, label)
 	table.insert(toastCards, { label = label, id = 0 })
 end
-local function renderToasts()
-	Feedback.advance(toastQueue, os.clock())
+local function placeToasts(): boolean
+	local view = workspace.CurrentCamera.ViewportSize
+	local insetTop, insetBottom = GuiService:GetGuiInset()
+	local modalTops: { number } = {}
+	for _, frame in modalFrames do
+		if frame.Visible then
+			table.insert(modalTops, frame.AbsolutePosition.Y)
+		end
+	end
+	local centre, scale, y, allowed = Layout.toasts(view.X, view.Y, insetTop.Y, insetBottom.Y, modalTops)
+	host.Position = UDim2.fromOffset(centre, y)
+	toastScale.Scale = scale
+	host.Visible = allowed
+	return not allowed
+end
+renderToasts = function()
+	Feedback.advance(toastQueue, os.clock(), placeToasts())
+	if topFrame then
+		topFrame.Position = UDim2.new(topFrame.Position.X,
+			UDim.new(0, Layout.toastHudTop(toastScale.Scale, host.Visible and #toastQueue.visible or 0)))
+	end
 	for _, card in toastCards do
 		local alive = false
 		for _, entry in toastQueue.visible do
@@ -324,24 +356,19 @@ local function renderToasts()
 			if card then
 				card.id = entry.id
 				card.label.Text = entry.text
-				card.label.Position = UDim2.fromOffset(0, row * 36 - 48)
+				card.label.TextTransparency = 1
+				animate(card.label, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { TextTransparency = 0 })
 				card.label.Visible = true
 			end
 		end
 		if card then
-			local position = UDim2.fromOffset(0, (row - 1) * 36)
-			if card.label.Position ~= position then
-				-- Don't restart an in-flight slide on every queue tick.
-				local active = animations[card.label]
-				if not active or active.goals.Position ~= position then
-					animate(card.label, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { Position = position })
-				end
-			end
+			-- List slots settle immediately: sliding could cross another pill.
+			card.label.LayoutOrder = row
 		end
 	end
 end
 local function showToast(text: string)
-	Feedback.enqueue(toastQueue, text, os.clock())
+	Feedback.enqueue(toastQueue, text, os.clock(), placeToasts())
 	renderToasts()
 end
 remotes:WaitForChild("Notify").OnClientEvent:Connect(showToast)
@@ -383,6 +410,7 @@ local chooser = new("Frame", {
 }, gui)
 new("UIListLayout", { FillDirection = Enum.FillDirection.Vertical, Padding = UDim.new(0, 10) }, chooser)
 scaled(chooser)
+watchModal(chooser)
 for _, choice in {
 	{ label = "Grand Prix", key = "gp", colour = Color3.fromRGB(28, 86, 214) },
 	{ label = "Reverse GP", key = "reverse", colour = Color3.fromRGB(120, 60, 200) },
@@ -1082,6 +1110,15 @@ workspace:GetAttributeChangedSignal("HappyHour"):Connect(refreshTop)
 player.CharacterAdded:Connect(function(character)
 	character:WaitForChild("HumanoidRootPart", 10)
 	refreshGuide()
+end)
+-- Settings live in the polish script; they use the same obstruction rule.
+task.spawn(function()
+	local settingsGui = player:WaitForChild("PlayerGui"):WaitForChild("PitLaneSettings")
+	local settings = settingsGui:WaitForChild("SettingsPanel")
+	if settings:IsA("GuiObject") then
+		watchModal(settings)
+		renderToasts()
+	end
 end)
 workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
 task.spawn(function()

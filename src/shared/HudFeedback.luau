@@ -45,13 +45,24 @@ HudFeedback.ToastLimit = 3
 HudFeedback.PendingLimit = 12
 HudFeedback.ToastLifetime = 3
 export type Toast = { id: number, text: string, expiresAt: number }
-export type Queue = { visible: { Toast }, pending: { Toast }, serial: number }
+export type Queue = { visible: { Toast }, pending: { Toast }, serial: number, heldAt: number? }
 
 function HudFeedback.newQueue(): Queue
 	return { visible = {}, pending = {}, serial = 0 }
 end
 
-function HudFeedback.advance(queue: Queue, now: number)
+function HudFeedback.advance(queue: Queue, now: number, held: boolean?)
+	-- Keep visible entries and their remaining lifetime when a modal blocks the lane.
+	-- Pending entries only start their lifetime when actually displayed.
+	if held then
+		if not queue.heldAt then queue.heldAt = now end
+		return
+	end
+	if queue.heldAt then
+		local duration = now - queue.heldAt
+		for _, entry in queue.visible do entry.expiresAt += duration end
+		queue.heldAt = nil
+	end
 	for i = #queue.visible, 1, -1 do
 		if queue.visible[i].expiresAt <= now then table.remove(queue.visible, i) end
 	end
@@ -63,13 +74,13 @@ function HudFeedback.advance(queue: Queue, now: number)
 	end
 end
 
-function HudFeedback.enqueue(queue: Queue, text: string, now: number)
-	HudFeedback.advance(queue, now)
+function HudFeedback.enqueue(queue: Queue, text: string, now: number, held: boolean?)
+	HudFeedback.advance(queue, now, held)
 	if text == "" then return end
 	queue.serial += 1
 	if #queue.pending == HudFeedback.PendingLimit then table.remove(queue.pending, 1) end
 	table.insert(queue.pending, { id = queue.serial, text = text, expiresAt = 0 })
-	HudFeedback.advance(queue, now)
+	HudFeedback.advance(queue, now, held)
 end
 
 return HudFeedback

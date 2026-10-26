@@ -61,12 +61,33 @@ function Layout.buttonsBottom(width: number, height: number): number
 	return height * Layout.ButtonBarCentre + Layout.ButtonBarHeight / 2 * Layout.scale(width, height)
 end
 
--- ScreenGuis use Roblox's safe inset (IgnoreGuiInset = false). Stay below the HUD and
--- event strip, and use exactly the top bar's horizontal safe area for the player list.
--- On phones this narrow central lane stays between the thumbstick and jump controls.
-function Layout.toasts(width: number, height: number, touch: boolean, event: boolean): (number, number, number)
-	local centre, s = Layout.topBar(width, height, touch)
-	return centre, s, 10 + (Layout.TopBarHeight + (event and 40 or 0) + 8) * s
+Layout.ToastWidth = 360
+Layout.ToastHeight = 32
+Layout.ToastGap = 4
+Layout.ToastMargin = 8
+Layout.ToastStackHeight = 3 * Layout.ToastHeight + 2 * Layout.ToastGap
+
+-- IgnoreGuiInset = false: positions are relative to Roblox's safe area, not the
+-- viewport centre. Insets and modal tops are viewport pixels from GetGuiInset and
+-- AbsolutePosition. Reserve the full three-pill stack, including stroke clearance,
+-- so promoting a waiting message cannot push the stack across an open modal.
+function Layout.toasts(width: number, height: number, insetTop: number, insetBottom: number,
+	modalTops: { number }?): (number, number, number, boolean)
+	local s = math.min(Layout.scale(width, height), (width - 2 * Layout.ToastMargin) / Layout.ToastWidth)
+	local y = Layout.ToastMargin
+	local bottom = insetTop + y + Layout.ToastStackHeight * s + Layout.ToastMargin
+	local limit = height - insetBottom
+	if modalTops then
+		for _, modalTop in modalTops do limit = math.min(limit, modalTop) end
+	end
+	local allowed = bottom <= limit
+	return width / 2, s, y, allowed
+end
+
+-- Give notifications their own lane instead of drawing over the HUD's cash text.
+function Layout.toastHudTop(scale: number, count: number): number
+	if count == 0 then return 10 end
+	return Layout.ToastMargin * 2 + (count * Layout.ToastHeight + (count - 1) * Layout.ToastGap) * scale
 end
 
 return Layout
