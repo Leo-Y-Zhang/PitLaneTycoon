@@ -1,3 +1,4 @@
+--!strict
 -- Pit Lane Tycoon polish: music, sound effects, the settings panel (music and sounds on or
 -- off, kept with the player's save) and how buttons feel: they grow under the pointer, dip
 -- when pressed and click. Every sound comes from a Roblox-licensed library (Config.Audio).
@@ -7,6 +8,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 
+local Layout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Layout"))
+local Icons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Icons"))
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
 local player = Players.LocalPlayer
@@ -96,9 +99,24 @@ end)
 local function feel(b: GuiButton)
 	if b:FindFirstChild("Feel") then return end
 	local s = new("UIScale", { Name = "Feel" }, b)
+	local active: Tween? = nil
 	local function to(size: number)
-		TweenService:Create(s, TweenInfo.new(0.12, Enum.EasingStyle.Quad), { Scale = size }):Play()
+		if active then active:Cancel() end
+		if player:GetAttribute("ReduceMotion") == true then
+			s.Scale = 1
+			return
+		end
+		local tween = TweenService:Create(s, TweenInfo.new(0.12, Enum.EasingStyle.Quad), { Scale = size })
+		active = tween
+		tween:Play()
 	end
+	local motionConnection = player:GetAttributeChangedSignal("ReduceMotion"):Connect(function()
+		if player:GetAttribute("ReduceMotion") == true then to(1) end
+	end)
+	b.Destroying:Connect(function()
+		motionConnection:Disconnect()
+		if active then active:Cancel() end
+	end)
 	b.MouseEnter:Connect(function()
 		to(1.05)
 	end)
@@ -144,26 +162,26 @@ local open = new("TextButton", {
 	BackgroundColor3 = PANEL, BackgroundTransparency = 0.1, Text = "", AutoButtonColor = true,
 }, gui)
 new("UICorner", { CornerRadius = UDim.new(0, 10) }, open)
-for i, knob in { 0.3, 0.7, 0.45 } do -- three sliders
-	local y = 10 + (i - 1) * 11
-	new("Frame", { Position = UDim2.fromOffset(10, y + 1), Size = UDim2.fromOffset(24, 2), BackgroundColor3 = INK,
-		BorderSizePixel = 0 }, open)
-	local dot = new("Frame", { Position = UDim2.fromOffset(10 + knob * 24 - 3, y - 2), Size = UDim2.fromOffset(7, 7),
-		BackgroundColor3 = Color3.fromRGB(255, 205, 60), BorderSizePixel = 0 }, open)
-	new("UICorner", { CornerRadius = UDim.new(1, 0) }, dot)
-end
+Icons.draw(open, "settings", INK)
 local panel = new("Frame", {
-	Name = "SettingsPanel", Position = UDim2.fromOffset(12, 62), Size = UDim2.fromOffset(200, 120),
+	Name = "SettingsPanel", Position = UDim2.fromOffset(12, Layout.SettingsPanelTop), Size = UDim2.fromOffset(244, Layout.SettingsPanelHeight),
 	BackgroundColor3 = PANEL, BackgroundTransparency = 0.05, Visible = false,
 }, gui)
 new("UICorner", { CornerRadius = UDim.new(0, 12) }, panel)
-local function toggle(y: number, label: string, setting: string, isOn: () -> boolean)
+local settingsScale = new("UIScale", {}, panel)
+local function rescaleSettings()
+	local view = workspace.CurrentCamera.ViewportSize
+	settingsScale.Scale = Layout.scale(view.X, view.Y)
+end
+workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescaleSettings)
+rescaleSettings()
+local function toggle(y: number, label: string, setting: string, attribute: string, isOn: () -> boolean)
 	new("TextLabel", {
-		Position = UDim2.fromOffset(14, y), Size = UDim2.fromOffset(90, 40), BackgroundTransparency = 1, Text = label,
+		Position = UDim2.fromOffset(14, y), Size = UDim2.fromOffset(136, 40), BackgroundTransparency = 1, Text = label,
 		Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = INK, TextXAlignment = Enum.TextXAlignment.Left,
 	}, panel)
 	local b = new("TextButton", {
-		Name = setting, Position = UDim2.fromOffset(110, y + 4), Size = UDim2.fromOffset(76, 32), Font = Enum.Font.GothamBold,
+		Name = setting, Position = UDim2.fromOffset(154, y + 4), Size = UDim2.fromOffset(76, 32), Font = Enum.Font.GothamBold,
 		TextSize = 15, TextColor3 = INK, AutoButtonColor = true,
 	}, panel)
 	new("UICorner", { CornerRadius = UDim.new(0, 8) }, b)
@@ -174,11 +192,14 @@ local function toggle(y: number, label: string, setting: string, isOn: () -> boo
 	b.Activated:Connect(function()
 		remotes:WaitForChild("Settings"):FireServer(setting, not isOn())
 	end)
-	player:GetAttributeChangedSignal(setting == "music" and "MusicOn" or "SfxOn"):Connect(show)
+	player:GetAttributeChangedSignal(attribute):Connect(show)
 	show()
 end
-toggle(14, "Music", "music", musicOn)
-toggle(64, "Sounds", "sfx", soundsOn)
+toggle(14, "Music", "music", "MusicOn", musicOn)
+toggle(59, "Sounds", "sfx", "SfxOn", soundsOn)
+toggle(104, "Reduce motion", "reduceMotion", "ReduceMotion", function()
+	return player:GetAttribute("ReduceMotion") == true
+end)
 open.Activated:Connect(function()
 	panel.Visible = not panel.Visible
 end)

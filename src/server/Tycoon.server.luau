@@ -62,7 +62,7 @@ end
 local notify = remote("Notify")
 local newSeason = remote("NewSeason")
 local claimGift = remote("ClaimGift")
-local settings = remote("Settings") -- ("music" | "sfx", on)
+local settings = remote("Settings") -- ("music" | "sfx" | "reduceMotion", on)
 local welcomed = remote("Welcomed") -- the first-visit card was read
 local redeem = Instance.new("RemoteFunction") -- a code in, a message back
 redeem.Name = "Redeem"
@@ -153,7 +153,7 @@ type Data = {
 	bestLapReverse: number, -- the Reverse GP's best lap
 	bestLapLong: number, -- the Endurance circuit's best lap
 	goal: number, banks: number, codes: { [string]: boolean }, -- the next goal (Config.Goals), times banked, codes used
-	settings: { music: boolean, sfx: boolean },
+	settings: { music: boolean, sfx: boolean, reduceMotion: boolean? },
 	welcomed: boolean, -- has seen the first-visit card
 	rares: { [string]: number }, -- rare parts collected, all seasons (the garage's case shows them)
 	likes: number, likedOn: { [string]: number }, -- likes this garage has had; whose garages this player liked today
@@ -165,6 +165,7 @@ type State = {
 	leaving: boolean, released: boolean, -- the leaving save is under way / has let go of the lock
 	unlogged: number, -- factory income not yet sent to analytics (sent once a minute)
 	giftAt: number, lastRedeem: number, -- server time the next gift is ready; last code tried (os.clock)
+	lastSetting: number?, -- last settings change (os.clock), not part of the save
 	lastCrate: number, -- last crew crate opened (os.clock)
 }
 local states: { [Player]: State } = {}
@@ -173,7 +174,7 @@ local function freshData(): Data
 	return {
 		cash = 0, bought = {}, season = 0, lastDaily = 0, streak = 0, receipts = {},
 		earned = 0, lastSeen = 0, offlineRate = 0, funnel = 0, bestLap = 0, laps = 0, bestLapReverse = 0, bestLapLong = 0,
-		goal = 1, banks = 0, codes = {}, settings = { music = true, sfx = true }, welcomed = false,
+		goal = 1, banks = 0, codes = {}, settings = { music = true, sfx = true, reduceMotion = false }, welcomed = false,
 		rares = {}, likes = 0, likedOn = {}, crew = {}, pickWindow = 0,
 	}
 end
@@ -388,6 +389,7 @@ local function publish(player: Player)
 	player:SetAttribute("CrewOwned", HttpService:JSONEncode(st.data.crew))
 	player:SetAttribute("CrewWorking", table.concat(crewWorking(st), ","))
 	player:SetAttribute("SfxOn", st.data.settings.sfx ~= false)
+	player:SetAttribute("ReduceMotion", st.data.settings.reduceMotion == true)
 	for name in Config.Passes do
 		player:SetAttribute("Owns" .. name, st.passes[name] == true)
 	end
@@ -1233,10 +1235,13 @@ welcomed.OnServerEvent:Connect(function(player)
 	end
 end)
 
--- music and sounds on or off, kept with the save
+-- Accessibility and audio preferences, kept with the save. Limit rapid requests.
 settings.OnServerEvent:Connect(function(player, which, on)
 	local st = states[player]
-	if st and (which == "music" or which == "sfx") and type(on) == "boolean" then
+	if st and (which == "music" or which == "sfx" or which == "reduceMotion") and type(on) == "boolean" then
+		local now = os.clock()
+		if now - (st.lastSetting or -math.huge) < 0.15 then return end
+		st.lastSetting = now
 		st.data.settings[which] = on
 		st.dirty = true
 		publish(player)

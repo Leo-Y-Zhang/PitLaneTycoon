@@ -40,8 +40,8 @@ Everything else is built and tested; these need your account, your ears or other
 - **Publish** under a group (step 2 below), with Max Players 6 and Studio API access on, then
   play the published game once to check saving across a leave and rejoin.
 - **A full server:** invite five friends into one server for ten minutes. The server held 60
-  physics steps a second with one full garage in Studio (1,492 parts); six full garages and six
-  cars have only been estimated, not seen.
+  physics fps with one full garage in Studio (5,423 parts), with a worst server step of
+  20.6 ms; six full garages and six cars have only been estimated, not seen.
 - **Passes, products and the group** (step 4) and the **Maturity questionnaire**.
 - **Announce the launch code** `PITLANE` in the game description.
 
