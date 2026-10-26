@@ -616,8 +616,9 @@ local function refreshShelf(plot, st: State)
 	end
 end
 
--- the working crew stand round the show car, each with their name in their rarity's colour
-local CREW_SPOTS = { Vector3.new(-7.5, 0, 14.5), Vector3.new(2, 0, 10.5), Vector3.new(11.5, 0, 14.5) }
+-- the working crew stand round the show car, each with their name in their rarity's colour:
+-- one at each end and one behind it, so nobody stands between the car and the front of the garage
+local CREW_SPOTS = { Vector3.new(-6.5, 0, 16), Vector3.new(2, 0, 19.5), Vector3.new(10.5, 0, 16) }
 local MEMBER_BY_KEY = {}
 for i, member in Config.Crew.members do
 	MEMBER_BY_KEY[member.key] = i
