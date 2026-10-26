@@ -5,9 +5,12 @@
 local Layout = {}
 
 Layout.TopBarWidth = 360
+Layout.TopBarHeight = 122
 -- Roblox's player list, top right on a computer: about 315 px with Seasons and Cash
 -- (measured in Studio on 25 Oct 2026)
 Layout.PlayerListWidth = 330
+Layout.SettingsPanelTop = 62
+Layout.SettingsPanelHeight = 154
 Layout.SettingsWidth = 56 -- the settings button, top left
 Layout.PanelMargin = 8 -- the least gap between a panel and the left edge of the screen
 Layout.ButtonBarHeight = 206 -- Shop, Race, Crew and New season, left edge
@@ -56,6 +59,14 @@ end
 -- the bottom of the left-edge buttons, in pixels from the top
 function Layout.buttonsBottom(width: number, height: number): number
 	return height * Layout.ButtonBarCentre + Layout.ButtonBarHeight / 2 * Layout.scale(width, height)
+end
+
+-- ScreenGuis use Roblox's safe inset (IgnoreGuiInset = false). Stay below the HUD and
+-- event strip, and use exactly the top bar's horizontal safe area for the player list.
+-- On phones this narrow central lane stays between the thumbstick and jump controls.
+function Layout.toasts(width: number, height: number, touch: boolean, event: boolean): (number, number, number)
+	local centre, s = Layout.topBar(width, height, touch)
+	return centre, s, 10 + (Layout.TopBarHeight + (event and 40 or 0) + 8) * s
 end
 
 return Layout

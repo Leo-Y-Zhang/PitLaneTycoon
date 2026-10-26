@@ -1,3 +1,4 @@
+--!strict
 -- Pit Lane Tycoon HUD: cash and income, the next purchase, the shop (and redeem codes), the
 -- race, crew and new-season buttons, the pit crew and its crates, the current goal and the
 -- gift for staying, toasts, and the guide line, sparks and "+$" pop-ups that show where to go
@@ -13,6 +14,8 @@ local Debris = game:GetService("Debris")
 local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Feedback = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudFeedback"))
+local Icons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Icons"))
 local Layout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Layout"))
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
 local player = Players.LocalPlayer
@@ -22,18 +25,7 @@ local PANEL = Color3.fromRGB(17, 20, 24)
 local RED = Color3.fromRGB(225, 38, 28) -- pit-lane red
 local GREEN = Color3.fromRGB(46, 204, 113)
 
-local function money(n: number): string
-	local units = { "", "K", "M", "B", "T", "Qa" }
-	local i = 1
-	while math.abs(n) >= 1000 and i < #units do
-		n /= 1000
-		i += 1
-	end
-	if i == 1 then
-		return "$" .. tostring(math.floor(n))
-	end
-	return string.format("$%.1f%s", n, units[i])
-end
+local money = Feedback.money
 
 local function new(class: string, props: { [string]: any }, parent: Instance?): any
 	local o = Instance.new(class)
@@ -45,6 +37,35 @@ local function new(class: string, props: { [string]: any }, parent: Instance?): 
 	end
 	return o
 end
+
+-- One active tween per target; toggling motion off also settles in-flight effects.
+local animations: { [Instance]: { tween: Tween, goals: { [string]: any } } } = {}
+local function reduceMotion(): boolean
+	return player:GetAttribute("ReduceMotion") == true
+end
+local function animate(target: Instance, info: TweenInfo, goals: { [string]: any })
+	local previous = animations[target]
+	if previous then previous.tween:Cancel() end
+	if reduceMotion() then
+		for key, value in goals do (target :: any)[key] = value end
+		animations[target] = nil
+		return
+	end
+	local tween = TweenService:Create(target, info, goals)
+	animations[target] = { tween = tween, goals = goals }
+	tween.Completed:Once(function()
+		if animations[target] and animations[target].tween == tween then animations[target] = nil end
+	end)
+	tween:Play()
+end
+player:GetAttributeChangedSignal("ReduceMotion"):Connect(function()
+	if not reduceMotion() then return end
+	for target, animation in animations do
+		animation.tween:Cancel()
+		for key, value in animation.goals do (target :: any)[key] = value end
+		animations[target] = nil
+	end
+end)
 
 local function round(o: GuiObject, r: number)
 	new("UICorner", { CornerRadius = UDim.new(0, r) }, o)
@@ -73,6 +94,9 @@ local function centred(o: GuiObject)
 end
 local topScale: UIScale? = nil
 local topFrame: Frame? = nil
+local toastHost: Frame? = nil
+local toastScale: UIScale? = nil
+local eventVisible = false
 local function rescale()
 	local view = workspace.CurrentCamera.ViewportSize
 	local s = Layout.scale(view.X, view.Y)
@@ -91,11 +115,16 @@ local function rescale()
 		topFrame.Position = UDim2.fromOffset(centre, 10)
 		topScale.Scale = barScale
 	end
+	if toastHost and toastScale then
+		local centre, scale, y = Layout.toasts(view.X, view.Y, phone, eventVisible)
+		toastHost.Position = UDim2.fromOffset(centre, y)
+		toastScale.Scale = scale
+	end
 end
 
 -- top bar: cash, income, waiting at the pad, and the next purchase -------------------
 local top = new("Frame", {
-	Name = "TopBar", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 10), Size = UDim2.fromOffset(360, 92),
+	Name = "TopBar", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 10), Size = UDim2.fromOffset(360, Layout.TopBarHeight),
 	BackgroundColor3 = PANEL, BackgroundTransparency = 0.1,
 }, gui)
 round(top, 12)
@@ -117,6 +146,10 @@ local function refreshEvent()
 	local name = workspace:GetAttribute("EventName") or ""
 	local left = (workspace:GetAttribute("EventEnds") or 0) - workspace:GetServerTimeNow()
 	eventBar.Visible = name ~= "" and left > 0
+	if eventVisible ~= eventBar.Visible then
+		eventVisible = eventBar.Visible
+		rescale()
+	end
 	if eventBar.Visible then
 		local s = math.ceil(left)
 		eventLabel.Text = ("%s  %d:%02d  %s"):format(string.upper(name), s // 60, s % 60, workspace:GetAttribute("EventText") or "")
@@ -132,6 +165,28 @@ local cashLabel = new("TextLabel", {
 	Size = UDim2.new(1, -20, 0, 34), Position = UDim2.fromOffset(10, 4), BackgroundTransparency = 1,
 	Font = Enum.Font.GothamBlack, TextSize = 28, TextColor3 = GREEN, Text = "$0",
 }, top)
+Icons.draw(cashLabel, "cash", GREEN)
+local cashScale = new("UIScale", {}, cashLabel)
+local displayedCash = new("NumberValue", { Name = "DisplayedCash" }, gui)
+local targetCash: number? = nil
+local cashTweenInfo = TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+displayedCash.Changed:Connect(function(value: number)
+	cashLabel.Text = money(value)
+end)
+local function updateCash(cash: number)
+	if cash == targetCash then return end
+	local previous = targetCash
+	targetCash = cash
+	if previous == nil then
+		displayedCash.Value = cash
+	else
+		animate(displayedCash, cashTweenInfo, { Value = cash })
+		if cash > previous and not reduceMotion() then
+			cashScale.Scale = 1.08
+			animate(cashScale, TweenInfo.new(0.22, Enum.EasingStyle.Quad), { Scale = 1 })
+		end
+	end
+end
 local subLabel = new("TextLabel", {
 	Size = UDim2.new(1, -20, 0, 20), Position = UDim2.fromOffset(10, 38), BackgroundTransparency = 1,
 	Font = Enum.Font.Gotham, TextScaled = true, TextColor3 = INK, Text = "",
@@ -151,15 +206,34 @@ local nextLabel = new("TextLabel", {
 new("UITextSizeConstraint", { MaxTextSize = 14 }, nextLabel)
 new("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }, nextLabel)
 
+-- The line must be complete AND the season fee banked; the server still decides eligibility.
+local seasonBar = new("Frame", {
+	Name = "SeasonProgress", Position = UDim2.fromOffset(10, 92), Size = UDim2.new(1, -20, 0, 22),
+	BackgroundColor3 = Color3.fromRGB(40, 44, 50),
+}, top)
+round(seasonBar, 6)
+local seasonFill = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.fromRGB(145, 103, 20) }, seasonBar)
+round(seasonFill, 6)
+local seasonLabel = new("TextLabel", {
+	Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Font = Enum.Font.GothamBold,
+	TextScaled = true, TextColor3 = INK, Text = "",
+}, seasonBar)
+new("UITextSizeConstraint", { MaxTextSize = 13 }, seasonLabel)
+
 local function cashNow(): number
 	local ls = player:FindFirstChild("leaderstats")
 	local cash = ls and ls:FindFirstChild("Cash")
 	return cash and (cash :: NumberValue).Value or 0
 end
 
+local seasonItems: { Feedback.ProgressItem } = {}
+for _, item in Config.Items do
+	table.insert(seasonItems, { key = item.key, season = item.season })
+end
+
 local function refreshTop()
 	local cash = cashNow()
-	cashLabel.Text = money(cash)
+	updateCash(cash)
 	local parts = { "+" .. money(player:GetAttribute("IncomePerMin") or 0) .. "/min" }
 	local pending = player:GetAttribute("Pending") or 0
 	if pending > 0 then
@@ -186,30 +260,97 @@ local function refreshTop()
 		nextLabel.Text = ("Next: %s  %s / %s"):format(name, money(cash), money(cost))
 		nextFill.Size = UDim2.fromScale(math.clamp(cash / math.max(cost, 1), 0, 1), 1)
 	end
+	local season = player:GetAttribute("Season") or 0
+	local trophy = player:GetAttribute("HasTrophy") == true
+	local fee = player:GetAttribute("SeasonCost") or Config.SeasonCost(season)
+	local progress, built, total = Feedback.seasonProgress(seasonItems, season,
+		player:GetAttribute("NextKey") or "", trophy, cash, fee)
+	local size = UDim2.fromScale(progress, 1)
+	if seasonFill:GetAttribute("Progress") ~= progress then
+		seasonFill:SetAttribute("Progress", progress)
+		animate(seasonFill, TweenInfo.new(0.3), { Size = size })
+	end
+	if not trophy then
+		seasonLabel.Text = ("Season %d: build the line  %d / %d"):format(season + 2, built, total)
+	elseif cash < fee then
+		seasonLabel.Text = ("Season %d: %s / %s"):format(season + 2, money(cash), money(fee))
+	else
+		seasonLabel.Text = ("Season %d ready!  +%d%% earnings"):format(season + 2, Config.SeasonBonus * 100)
+	end
 end
 
 -- toasts ----------------------------------------------------------------------------
-local toast = new("TextLabel", {
-	AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -110), Size = UDim2.fromOffset(420, 40),
-	BackgroundColor3 = PANEL, BackgroundTransparency = 1, TextTransparency = 1, TextColor3 = INK,
-	Font = Enum.Font.GothamBold, TextSize = 17, Text = "",
+-- Three reusable cards, with a bounded FIFO waiting behind them.
+local toastQueue = Feedback.newQueue()
+local host = new("Frame", {
+	Name = "Toasts", AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(360, 108),
+	BackgroundTransparency = 1, ZIndex = 10,
 }, gui)
-round(toast, 10)
-scaled(toast)
-local toastToken = 0
-local function showToast(text: string)
-	toastToken += 1
-	local mine = toastToken
-	toast.Text = text
-	toast.BackgroundTransparency = 0.15
-	toast.TextTransparency = 0
-	task.delay(2.6, function()
-		if mine == toastToken then
-			TweenService:Create(toast, TweenInfo.new(0.4), { BackgroundTransparency = 1, TextTransparency = 1 }):Play()
+toastHost = host
+toastScale = new("UIScale", {}, host)
+local toastCards: { { label: TextLabel, id: number } } = {}
+for _ = 1, Feedback.ToastLimit do
+	local label = new("TextLabel", {
+		Size = UDim2.fromOffset(360, 32), BackgroundColor3 = PANEL, BackgroundTransparency = 0.08,
+		TextColor3 = INK, Font = Enum.Font.GothamBold, TextScaled = true, Text = "", Visible = false, ZIndex = 11,
+	}, host)
+	round(label, 8)
+	new("UIStroke", { Color = GREEN, Thickness = 1 }, label)
+	new("UITextSizeConstraint", { MaxTextSize = 16 }, label)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, label)
+	table.insert(toastCards, { label = label, id = 0 })
+end
+local function renderToasts()
+	Feedback.advance(toastQueue, os.clock())
+	for _, card in toastCards do
+		local alive = false
+		for _, entry in toastQueue.visible do
+			if entry.id == card.id then alive = true end
 		end
-	end)
+		if not alive then
+			card.id = 0
+			card.label.Visible = false
+		end
+	end
+	for row, entry in toastQueue.visible do
+		local card = nil
+		for _, candidate in toastCards do
+			if candidate.id == entry.id then card = candidate; break end
+		end
+		if not card then
+			for _, candidate in toastCards do
+				if candidate.id == 0 then card = candidate; break end
+			end
+			if card then
+				card.id = entry.id
+				card.label.Text = entry.text
+				card.label.Position = UDim2.fromOffset(0, row * 36 - 48)
+				card.label.Visible = true
+			end
+		end
+		if card then
+			local position = UDim2.fromOffset(0, (row - 1) * 36)
+			if card.label.Position ~= position then
+				-- Don't restart an in-flight slide on every queue tick.
+				local active = animations[card.label]
+				if not active or active.goals.Position ~= position then
+					animate(card.label, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { Position = position })
+				end
+			end
+		end
+	end
+end
+local function showToast(text: string)
+	Feedback.enqueue(toastQueue, text, os.clock())
+	renderToasts()
 end
 remotes:WaitForChild("Notify").OnClientEvent:Connect(showToast)
+task.spawn(function()
+	while true do
+		renderToasts()
+		task.wait(0.1)
+	end
+end)
 
 -- buttons ---------------------------------------------------------------------------
 -- left edge, above the middle: clear of a phone's thumbstick (bottom left) and jump button
@@ -223,22 +364,16 @@ local shopButton = button("Shop", RED, bar)
 shopButton.LayoutOrder = 1
 local raceButton = button("Race", Color3.fromRGB(28, 86, 214), bar)
 raceButton.LayoutOrder = 2
--- a chequered flag before the word
-new("UIPadding", { PaddingLeft = UDim.new(0, 22) }, raceButton)
-for col = 0, 2 do
-	for row = 0, 1 do
-		new("Frame", {
-			Position = UDim2.new(0, -6 + col * 6, 0.5, -6 + row * 6), Size = UDim2.fromOffset(6, 6), BorderSizePixel = 0,
-			BackgroundColor3 = (col + row) % 2 == 0 and INK or Color3.fromRGB(17, 20, 24),
-		}, raceButton)
-	end
-end
+Icons.button(shopButton, "cash", INK)
+Icons.button(raceButton, "race", INK)
 local crewButton = button("Crew", Color3.fromRGB(120, 60, 200), bar)
 crewButton.Name = "CrewButton"
 crewButton.LayoutOrder = 3
+Icons.button(crewButton, "crew", INK)
 crewButton.Visible = false -- until the crew unlocks
 local seasonButton = button("New season", Color3.fromRGB(200, 150, 20), bar)
 seasonButton.LayoutOrder = 4
+Icons.button(seasonButton, "goal", INK)
 seasonButton.Visible = false
 -- the time trial: into your car on the grid, or back out to the garage. Once the Reverse GP
 -- is open, Race asks which layout first (the Endurance circuit joins them in season 3).
@@ -249,13 +384,13 @@ local chooser = new("Frame", {
 new("UIListLayout", { FillDirection = Enum.FillDirection.Vertical, Padding = UDim.new(0, 10) }, chooser)
 scaled(chooser)
 for _, choice in {
-	{ "Grand Prix", "gp", Color3.fromRGB(28, 86, 214) },
-	{ "Reverse GP", "reverse", Color3.fromRGB(120, 60, 200) },
-	{ "Endurance", "long", Color3.fromRGB(214, 110, 20) },
+	{ label = "Grand Prix", key = "gp", colour = Color3.fromRGB(28, 86, 214) },
+	{ label = "Reverse GP", key = "reverse", colour = Color3.fromRGB(120, 60, 200) },
+	{ label = "Endurance", key = "long", colour = Color3.fromRGB(214, 110, 20) },
 } do
-	local b = button(choice[1], choice[3], chooser)
-	b.Name = choice[2]
-	if choice[2] == "long" then
+	local b = button(choice.label, choice.colour, chooser)
+	b.Name = choice.key
+	if choice.key == "long" then
 		local function show()
 			b.Visible = player:GetAttribute("LongUnlocked") == true
 		end
@@ -264,7 +399,7 @@ for _, choice in {
 	end
 	b.Activated:Connect(function()
 		chooser.Visible = false
-		remotes:WaitForChild("Drive"):FireServer(true, choice[2])
+		remotes:WaitForChild("Drive"):FireServer(true, choice.key)
 	end)
 end
 raceButton.Activated:Connect(function()
@@ -314,9 +449,10 @@ local function row(text: string, onBuy: () -> ())
 	r.Activated:Connect(onBuy)
 end
 for name, id in Config.Passes do
+	local passName = tostring(name)
 	if id ~= 0 then
 		row(PASS_TEXT[name] or name, function()
-			if not player:GetAttribute("Owns" .. name) then
+			if not player:GetAttribute("Owns" .. passName) then
 				MarketplaceService:PromptGamePassPurchase(player, id)
 			else
 				showToast("You already own this pass")
@@ -408,21 +544,21 @@ local crewClose = button("Close", Color3.fromRGB(60, 64, 70), crewPanel)
 crewClose.Size = UDim2.fromOffset(140, 48)
 crewClose.Position = UDim2.new(1, -154, 1, -66)
 
-local function rarityColour(member): Color3
+local function rarityColour(member: typeof(Config.Crew.members[1])): Color3
 	local c = Config.Crew.rarities[member.rarity].colour
 	return Color3.fromRGB(c[1], c[2], c[3])
 end
-local function boostText(member): string
+local function boostText(member: typeof(Config.Crew.members[1])): string
 	local parts = {}
 	if member.income > 0 then
 		table.insert(parts, ("+%d%% income"):format(math.floor(member.income * 100 + 0.5)))
 	end
 	if (member.rare or 1) > 1 then
-		table.insert(parts, ("rare parts x%g"):format(member.rare))
+		table.insert(parts, ("rare parts x%g"):format(member.rare or 1))
 	end
 	return table.concat(parts, ", ")
 end
-local function memberOf(key: string?)
+local function memberOf(key: string?): typeof(Config.Crew.members[1])?
 	for _, member in Config.Crew.members do
 		if member.key == key then
 			return member
@@ -526,6 +662,7 @@ local function showReveal(key: string)
 	revealTier.TextColor3 = INK
 	revealStroke.Color = PURPLE
 	for i = 1, 10 do
+		if reduceMotion() then break end
 		local m = members[math.random(1, #members)]
 		revealName.Text = m.name
 		revealName.TextColor3 = rarityColour(m)
@@ -543,8 +680,8 @@ local function showReveal(key: string)
 			revealStroke.Color = colour
 		end
 	end
-	revealScale.Scale = 0.6
-	TweenService:Create(revealScale, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	revealScale.Scale = reduceMotion() and 1 or 0.6
+	animate(revealScale, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 })
 	task.wait(1.8)
 	if token == revealToken then
 		reveal.Visible = false
@@ -688,7 +825,8 @@ end
 -- the like prompt on your own garage's sign is for other players
 local function hideOwnLike()
 	local plot = myPlot()
-	local prompt = plot and plot:FindFirstChild("Sign") and plot.Sign:FindFirstChild("Like")
+	local sign = plot and plot:FindFirstChild("Sign")
+	local prompt = sign and sign:FindFirstChild("Like")
 	if prompt then
 		(prompt :: ProximityPrompt).Enabled = false
 	end
@@ -700,7 +838,7 @@ local function refreshGuide()
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	local key, cost = player:GetAttribute("NextKey") or "", player:GetAttribute("NextCost") or 0
 	local cash, pending = cashNow(), player:GetAttribute("Pending") or 0
-	local target = nil
+	local target: Instance? = nil
 	if plot and root and key ~= "" then
 		if cash >= cost then
 			target = plot:FindFirstChild("Buy_" .. key)
@@ -725,6 +863,7 @@ local function refreshGuide()
 end
 
 local function sparks(at: BasePart)
+	if reduceMotion() then return end
 	local holder = new("Attachment", { Position = Vector3.new(0, at.Size.Y / 2, 0) }, at)
 	local burst = new("ParticleEmitter", {
 		Rate = 0, Speed = NumberRange.new(8, 14), Lifetime = NumberRange.new(0.5, 0.9), SpreadAngle = Vector2.new(70, 70),
@@ -735,19 +874,59 @@ local function sparks(at: BasePart)
 	Debris:AddItem(holder, 1.5)
 end
 
-local function popUp(text: string)
-	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-	if not root then return end
-	-- built whole before it goes on the character, so it appears with its text
-	local board = new("BillboardGui", { Size = UDim2.fromOffset(160, 40), StudsOffset = Vector3.new(0, 3, 0), AlwaysOnTop = true })
+-- Fixed pool: bursts and auto-collect never allocate more than six billboards.
+type CashPopup = { board: BillboardGui, label: TextLabel, token: number }
+local popupPool: { CashPopup } = {}
+for _ = 1, 6 do
+	local board = new("BillboardGui", {
+		Size = UDim2.fromOffset(160, 40), AlwaysOnTop = true, Enabled = false, MaxDistance = 120,
+	})
 	local label = new("TextLabel", {
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextScaled = true,
-		TextColor3 = GREEN, TextStrokeTransparency = 0.3, Text = text,
+		TextColor3 = GREEN, TextStrokeTransparency = 0.3, Text = "",
 	}, board)
-	board.Parent = root
-	TweenService:Create(board, TweenInfo.new(1.1), { StudsOffset = Vector3.new(0, 6, 0) }):Play()
-	TweenService:Create(label, TweenInfo.new(1.1), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
-	Debris:AddItem(board, 1.2)
+	table.insert(popupPool, { board = board, label = label, token = 0 })
+end
+local function resetPopup(entry: CashPopup)
+	entry.token += 1
+	for _, target in { entry.board :: Instance, entry.label :: Instance } do
+		local active = animations[target]
+		if active then active.tween:Cancel(); animations[target] = nil end
+	end
+	entry.board.Enabled = false
+	entry.board.Parent = nil
+end
+-- Detach pooled instances before Roblox destroys the old character on respawn.
+player.CharacterRemoving:Connect(function()
+	for _, entry in popupPool do resetPopup(entry) end
+end)
+local popupCursor = 0
+local function popUp(text: string)
+	local plot = myPlot()
+	local collector = plot and plot:FindFirstChild("CollectPad")
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if not root or not collector or not collector:IsA("BasePart") then return end
+	popupCursor = popupCursor % #popupPool + 1
+	local entry = popupPool[popupCursor]
+	-- A reused slot cancels both old tweens before restoring opacity and position.
+	resetPopup(entry)
+	local token = entry.token
+	entry.board.Adornee = collector
+	entry.board.StudsOffsetWorldSpace = Vector3.new((popupCursor % 3 - 1) * 1.2, 2 + (popupCursor % 2) * 0.6, 0)
+	entry.label.Text = text
+	entry.label.TextTransparency = 0
+	entry.label.TextStrokeTransparency = 0.3
+	-- Keep the existing character-root path used by the smoke test; Adornee anchors it to the collector.
+	entry.board.Parent = root
+	entry.board.Enabled = true
+	if not reduceMotion() then
+		animate(entry.board, TweenInfo.new(1.1), { StudsOffsetWorldSpace = entry.board.StudsOffsetWorldSpace + Vector3.new(0, 3, 0) })
+		animate(entry.label, TweenInfo.new(1.1), { TextTransparency = 1, TextStrokeTransparency = 1 })
+	end
+	task.delay(1.2, function()
+		if entry.token ~= token then return end
+		resetPopup(entry)
+	end)
 end
 
 remotes:WaitForChild("Effect").OnClientEvent:Connect(function(kind: string, arg: any)
@@ -829,16 +1008,7 @@ local giftButton = button("Gift", Color3.fromRGB(60, 64, 70), goals)
 giftButton.Position = UDim2.fromOffset(12, 88)
 giftButton.Size = UDim2.new(1, -24, 0, 48)
 giftButton.TextSize = 16
--- a little gift box before the words
-new("UIPadding", { PaddingLeft = UDim.new(0, 24) }, giftButton)
-for _, piece in { -- lid, box, ribbon, two bow loops
-	{ -10, -7, 20, 5, Color3.fromRGB(225, 38, 28) }, { -8, -2, 16, 11, Color3.fromRGB(225, 38, 28) },
-	{ -2, -7, 4, 16, Color3.fromRGB(255, 205, 60) }, { -7, -11, 5, 4, Color3.fromRGB(255, 205, 60) },
-	{ 2, -11, 5, 4, Color3.fromRGB(255, 205, 60) },
-} do
-	new("Frame", { Position = UDim2.new(0, piece[1], 0.5, piece[2]), Size = UDim2.fromOffset(piece[3], piece[4]),
-		BorderSizePixel = 0, BackgroundColor3 = piece[5] }, giftButton)
-end
+Icons.button(giftButton, "gift", INK)
 giftButton.Activated:Connect(function()
 	remotes:WaitForChild("ClaimGift"):FireServer()
 end)
