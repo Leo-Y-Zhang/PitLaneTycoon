@@ -286,7 +286,9 @@ end
 -- front, where players stand), a crosshead in team colours, a hydraulic cylinder and the die
 -- that comes down on each part. cf = the crosshead's centre. Returns the
 -- crosshead (named, the label's anchor) and the die (moved by the stamp).
+-- detailed with a bolted base, post bands, hydraulic lines, controls, braces and a gauge.
 function Scenery.press(parent: Instance, cf: CFrame, name: string, colour: Color3): (Part, Part)
+	local HAZARD = Color3.fromRGB(250, 205, 40)
 	for _, x in { -0.8, 0.8 } do
 		block(parent, cf * CFrame.new(x, -4.3, 3.8), Vector3.new(0.4, 9.2, 0.6), STEEL, Enum.Material.Metal)
 	end
@@ -301,6 +303,70 @@ function Scenery.press(parent: Instance, cf: CFrame, name: string, colour: Color
 	for k, z in { -0.75, 0, 0.75 } do -- hazard stripes on the die's face
 		block(parent, cf * CFrame.new(-1.11, -2.9, z), Vector3.new(0.02, 0.5, 0.5), k % 2 == 1 and Color3.fromRGB(250, 205, 40) or CARBON)
 	end
+	-- a floor plate and four bolts behind the belt
+	block(parent, cf * CFrame.new(0, -8.5, 3.8), Vector3.new(2.6, 0.2, 1.05), STEEL:Lerp(CARBON, 0.55), Enum.Material.Metal)
+	for _, x in { -1.08, 1.08 } do
+		for _, z in { 3.45, 4.15 } do
+			local bolt = block(parent, cf * CFrame.new(x, -8.34, z) * CFrame.Angles(0, 0, math.rad(90)),
+				Vector3.new(0.12, 0.18, 0.18), STEEL, Enum.Material.Metal)
+			bolt.Shape = Enum.PartType.Cylinder
+			bolt.CastShadow = false
+		end
+	end
+	-- hazard bands wrap the lower posts
+	for _, x in { -0.8, 0.8 } do
+		for k = 0, 2 do
+			block(parent, cf * CFrame.new(x, -7.58 + k * 0.83, 3.8), Vector3.new(0.46, 0.82, 0.66),
+				k % 2 == 0 and HAZARD or CARBON, Enum.Material.Metal)
+		end
+	end
+	-- hydraulic lines rise behind the posts and turn into the cylinder's top
+	local pipeSteel = STEEL:Lerp(CARBON, 0.25)
+	for _, x in { -0.65, 0.65 } do
+		local riser = block(parent, cf * CFrame.new(x, -4.4, 4.18) * CFrame.Angles(0, 0, math.rad(90)),
+			Vector3.new(7.5, 0.18, 0.18), pipeSteel, Enum.Material.Metal)
+		riser.Shape = Enum.PartType.Cylinder
+		local elbow = block(parent, cf * CFrame.new(x, -0.65, 4.18), Vector3.new(0.24, 0.24, 0.24), pipeSteel, Enum.Material.Metal)
+		elbow.CastShadow = false
+		local feed = block(parent, cf * CFrame.new(x, -0.65, 2.09) * CFrame.Angles(0, math.rad(90), 0),
+			Vector3.new(4.18, 0.18, 0.18), pipeSteel, Enum.Material.Metal)
+		feed.Shape = Enum.PartType.Cylinder
+	end
+	-- front-facing controls and a thin hazard frame on the right post
+	block(parent, cf * CFrame.new(0.82, -4.1, 3.38), Vector3.new(0.72, 0.85, 0.32), CARBON, Enum.Material.Metal)
+	for _, button in {
+		{ x = 0.65, colour = Color3.fromRGB(40, 230, 90) },
+		{ x = 0.99, colour = Color3.fromRGB(235, 40, 40) },
+	} do
+		local p = block(parent, cf * CFrame.new(button.x, -4.1, 3.16), Vector3.new(0.18, 0.18, 0.12), button.colour, Enum.Material.Neon)
+		p.CastShadow = false
+	end
+	for _, y in { -4.54, -3.66 } do
+		block(parent, cf * CFrame.new(0.82, y, 3.2), Vector3.new(0.8, 0.04, 0.06), HAZARD, Enum.Material.Metal).CastShadow = false
+	end
+	for _, x in { 0.44, 1.2 } do
+		block(parent, cf * CFrame.new(x, -4.1, 3.2), Vector3.new(0.04, 0.88, 0.06), HAZARD, Enum.Material.Metal).CastShadow = false
+	end
+	-- diagonal braces support the head at each post
+	for _, x in { -0.8, 0.8 } do
+		block(parent, cf * CFrame.new(x, -0.9, 3.15) * CFrame.Angles(math.rad(45), 0, 0),
+			Vector3.new(0.32, 0.32, 1.6), STEEL, Enum.Material.Metal)
+	end
+	-- three bolt heads on the head's front face
+	for _, x in { -0.85, 0, 0.85 } do
+		local bolt = block(parent, cf * CFrame.new(x, 0, -1.65) * CFrame.Angles(0, math.rad(90), 0),
+			Vector3.new(0.12, 0.2, 0.2), STEEL, Enum.Material.Metal)
+		bolt.Shape = Enum.PartType.Cylinder
+		bolt.CastShadow = false
+	end
+	-- a white pressure dial and red needle on the cylinder's front
+	local gauge = block(parent, cf * CFrame.new(0, -1.35, -0.73) * CFrame.Angles(0, math.rad(90), 0),
+		Vector3.new(0.08, 0.45, 0.45), WHITE, Enum.Material.Metal)
+	gauge.Shape = Enum.PartType.Cylinder
+	gauge.CastShadow = false
+	local needle = block(parent, cf * CFrame.new(0.035, -1.3, -0.79) * CFrame.Angles(0, 0, math.rad(-35)),
+		Vector3.new(0.035, 0.22, 0.025), Color3.fromRGB(235, 40, 40), Enum.Material.Metal)
+	needle.CastShadow = false
 	return head, die
 end
 
