@@ -155,10 +155,43 @@ function Scenery.garagePiece(name: string, parent: Instance, cf: CFrame, team: {
 		p(0, 0.06, -25.8, 64, 0.12, 0.4, team.colour, glow)
 	elseif name == "BackWall" then
 		p(0, 6, 25.5, 64, 12, 1, wall, wallMat).CanCollide = true
+		-- panel seams stop short of the nameplate
+		for _, x in { -28, -20, 20, 28 } do
+			p(x, 5, 24.97, 0.15, 9.6, 0.06, wall:Lerp(Color3.new(0, 0, 0), 0.12), wallMat).CastShadow = false
+		end
+		-- a metal kick plate protects the bottom of the wall
+		p(0, 0.6, 24.96, 64, 1.2, 0.08, STEEL, Enum.Material.Metal).CastShadow = false
+		-- high louvres let the garage breathe
+		for _, x in { -24, 24 } do
+			p(x, 8.2, 24.88, 3, 1.6, 0.24, CARBON, Enum.Material.Metal).CastShadow = false
+			for k = 0, 3 do
+				p(x, 7.66 + k * 0.36, 24.73, 2.7, 0.12, 0.06, STEEL, Enum.Material.Metal).CastShadow = false
+			end
+		end
 	elseif name == "SideWalls" then
 		for _, x in { -31.5, 31.5 } do
 			p(x, 6, 10, 1, 12, 32, wall, wallMat).CanCollide = true
 		end
+		-- side panel seams leave the collect pad's standing space clear
+		for _, side in { -1, 1 } do
+			for _, z in { -2, 6, 14, 22 } do
+				local bottom = if side == 1 and z == 14 then 4.05 else 0.2
+				p(side * 30.97, (bottom + 9.8) / 2, z, 0.06, 9.8 - bottom, 0.15,
+					wall:Lerp(Color3.new(0, 0, 0), 0.12), wallMat).CastShadow = false
+			end
+		end
+		-- kick plates have a gap beside the collect pad
+		p(-30.96, 0.6, 10, 0.08, 1.2, 32, STEEL, Enum.Material.Metal).CastShadow = false
+		for _, plate in { { z = 0.95, length = 13.9 }, { z = 21.05, length = 9.9 } } do
+			p(30.96, 0.6, plate.z, 0.08, 1.2, plate.length, STEEL, Enum.Material.Metal).CastShadow = false
+		end
+		-- a red extinguisher hangs beside the open front
+		local extinguisher = p(-30.5, 2.1, -2.5, 1.8, 0.7, 0.7, Color3.fromRGB(200, 32, 32), Enum.Material.Metal)
+		extinguisher.Shape = Enum.PartType.Cylinder
+		extinguisher.CFrame = cf * CFrame.new(-30.5, 2.1, -2.5) * CFrame.Angles(0, 0, math.rad(90))
+		extinguisher.CastShadow = false
+		p(-30.45, 3.13, -2.5, 0.45, 0.26, 0.35, CARBON).CastShadow = false
+		p(-30.9, 2.1, -2.5, 0.2, 0.25, 0.9, STEEL, Enum.Material.Metal).CastShadow = false
 	elseif name == "Livery" then
 		for _, x in { -31.5, 31.5 } do
 			p(x, 10.5, 10, 1.15, 1.2, 32.1, team.colour, glow)
@@ -171,6 +204,33 @@ function Scenery.garagePiece(name: string, parent: Instance, cf: CFrame, team: {
 		p(0, 12.5, 22, 65, 1, 8.5, CARBON, Enum.Material.Metal) -- leaves the car in the sun
 		for _, x in { -20, 0, 20 } do
 			p(x, 11.6, 18.2, 0.4, 0.8, 0.4, STEEL, Enum.Material.Metal)
+		end
+		-- Warren trusses leave gaps for the flag and rear team band
+		local function diagonal(a: Vector3, b: Vector3)
+			local mid = (a + b) / 2
+			local member = p(mid.X, mid.Y, mid.Z, 0.15, 0.15, (b - a).Magnitude, STEEL, Enum.Material.Metal)
+			member.CFrame = cf * CFrame.lookAt(mid, b)
+			member.CastShadow = false
+		end
+		for _, x in { -10, 10, -28, 28 } do
+			if x == -28 then
+				p(x, 10.9, 21, 0.25, 0.25, 5.6, STEEL, Enum.Material.Metal).CastShadow = false
+				p(x, 10.9, 24.45, 0.25, 0.25, 0.5, STEEL, Enum.Material.Metal).CastShadow = false
+			else
+				p(x, 10.9, 21.45, 0.25, 0.25, 6.5, STEEL, Enum.Material.Metal).CastShadow = false
+			end
+			for k = 0, 4 do
+				local z1, z2 = 18.2 + k * 1.4, math.min(18.2 + (k + 1) * 1.4, 25)
+				local y1 = if k % 2 == 0 then 11.025 else 11.925
+				local y2 = if k % 2 == 0 then 11.925 else 11.025
+				if x == -28 and k == 4 then
+					y1 += (y2 - y1) * (24.2 - z1) / (z2 - z1)
+					z1 = 24.2
+				end
+				diagonal(Vector3.new(x, y1, z1), Vector3.new(x, y2, z2))
+			end
+			p(x, 11.45, 18.2, 0.25, 1.1, 0.25, STEEL, Enum.Material.Metal).CastShadow = false
+			p(x, 11.6, 25, 0.25, 0.8, 0.25, STEEL, Enum.Material.Metal).CastShadow = false
 		end
 	elseif name == "Lights" then
 		for _, x in { -20, 0, 20 } do -- strip lights under the awning
@@ -214,6 +274,63 @@ function Scenery.garagePiece(name: string, parent: Instance, cf: CFrame, team: {
 		end
 		p(-29.5, 6, 24, 0.3, 12, 0.3, STEEL, Enum.Material.Metal) -- flagpole
 		p(-27.8, 10.6, 24, 3.2, 2, 0.1, team.colour, Enum.Material.Fabric)
+		-- a pegboard keeps the hand tools above the back of the garage
+		p(22, 4.6, 24.88, 8, 4, 0.12, concrete:Lerp(Color3.fromRGB(156, 145, 129), 0.55), wallMat).CastShadow = false
+		for _, x in { 18.6, 20.6, 22.6, 24.6 } do
+			for _, y in { 3, 6.2 } do
+				p(x, y, 24.81, 0.08, 0.08, 0.02, CARBON).CastShadow = false
+			end
+		end
+		for _, tool in {
+			{ x = 18.9, y = 4.4, length = 1.5, jaw = 0.4 },
+			{ x = 20.2, y = 4.2, length = 1.1, jaw = 0.35 },
+		} do
+			p(tool.x, tool.y, 24.78, 0.14, tool.length, 0.08, STEEL, Enum.Material.Metal).CastShadow = false
+			for _, dx in { -0.16, 0.16 } do
+				p(tool.x + dx, tool.y + tool.length / 2 + tool.jaw / 2 - 0.05, 24.78,
+					0.14, tool.jaw, 0.08, STEEL, Enum.Material.Metal).CastShadow = false
+			end
+		end
+		p(21.6, 4.3, 24.78, 0.18, 1.4, 0.08, team.colour, glow).CastShadow = false
+		p(21.6, 5.05, 24.78, 0.85, 0.3, 0.08, STEEL, Enum.Material.Metal).CastShadow = false
+		p(23, 3.9, 24.78, 0.26, 0.65, 0.08, team.colour, glow).CastShadow = false
+		p(23, 4.65, 24.78, 0.08, 0.85, 0.08, STEEL, Enum.Material.Metal).CastShadow = false
+		p(24.8, 4.65, 24.78, 0.14, 1.6, 0.08, STEEL, Enum.Material.Metal).CastShadow = false
+		p(24.8, 3.6, 24.78, 0.24, 0.5, 0.08, team.colour, glow).CastShadow = false
+		local wrenchHead = p(24.8, 5.5, 24.78, 0.08, 0.45, 0.45, STEEL, Enum.Material.Metal)
+		wrenchHead.Shape = Enum.PartType.Cylinder
+		wrenchHead.CFrame = cf * CFrame.new(24.8, 5.5, 24.78) * CFrame.Angles(0, math.rad(90), 0)
+		wrenchHead.CastShadow = false
+		-- compound colours sit on the top sidewalls of the tyre stacks
+		for _, tyre in {
+			{ x = 27, z = 21, colour = Color3.fromRGB(220, 40, 40) },
+			{ x = 24, z = 21, colour = Color3.fromRGB(245, 210, 40) },
+			{ x = -23, z = 22, colour = WHITE },
+		} do
+			local ring = p(tyre.x, 3.83, tyre.z, 0.06, 2.24, 2.24, tyre.colour)
+			ring.Shape = Enum.PartType.Cylinder
+			ring.CFrame = cf * CFrame.new(tyre.x, 3.83, tyre.z) * CFrame.Angles(0, 0, math.rad(90))
+			ring.CastShadow = false
+			local hub = p(tyre.x, 3.88, tyre.z, 0.04, 1.85, 1.85, CARBON, Enum.Material.Metal)
+			hub.Shape = Enum.PartType.Cylinder
+			hub.CFrame = cf * CFrame.new(tyre.x, 3.88, tyre.z) * CFrame.Angles(0, 0, math.rad(90))
+			hub.CastShadow = false
+		end
+		-- a two-rail wall rack holds four upright spare tyres
+		for _, rail in { { x = -29.7, y = 1 }, { x = -30.4, y = 2.4 } } do
+			p(rail.x, rail.y, 14, 0.2, 0.2, 8, STEEL, Enum.Material.Metal).CastShadow = false
+			for _, z in { 10.1, 17.9 } do
+				p(-30.2, rail.y, z, 1.4, 0.16, 0.2, STEEL, Enum.Material.Metal).CastShadow = false
+			end
+		end
+		for _, z in { 11, 13.2, 15.4, 17.6 } do
+			local tyre = p(-29.7, 2.2, z, 0.9, 2.2, 2.2, CARBON)
+			tyre.Shape = Enum.PartType.Cylinder
+			tyre.CastShadow = false
+			local hub = p(-29.21, 2.2, z, 0.08, 1.1, 1.1, team.colour, glow)
+			hub.Shape = Enum.PartType.Cylinder
+			hub.CastShadow = false
+		end
 	elseif name == "UpperDeck" then
 		-- a second storey over the back of the garage: glass front, team band, roof sign
 		p(0, 16.5, 25.5, 64, 7, 1, wall, wallMat)
