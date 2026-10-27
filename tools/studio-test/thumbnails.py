@@ -79,6 +79,7 @@ def main() -> None:
     titled(views["line"], (1280, 720), "PIT LANE TYCOON", "Every part pays").save(out / "thumbnail-3.png")
     titled(views["paddock"], (1280, 720), "PIT LANE TYCOON", "Six teams. One trophy.").save(out / "thumbnail-4.png")
     titled(views["night"], (1280, 720), "PIT LANE TYCOON", "A new look in season 3").save(out / "thumbnail-5.png")
+    titled(views["dusk"], (1280, 720), "PIT LANE TYCOON", "Racing day and night").save(out / "thumbnail-6.png")
     icon = car_icon(views["race"])  # the car alone on track: the garage shot has the crew behind it
     icon.save(out / "icon.png")
     for f in sorted(out.glob("*.png")):
