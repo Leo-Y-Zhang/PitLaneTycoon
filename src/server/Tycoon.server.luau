@@ -10,6 +10,7 @@ local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
+local Onboarding = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Onboarding"))
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Scenery = require(script.Parent:WaitForChild("Scenery"))
 local SaveLock = require(script.Parent:WaitForChild("SaveLock"))
@@ -153,7 +154,7 @@ type Data = {
 	bestLapReverse: number, -- the Reverse GP's best lap
 	bestLapLong: number, -- the Endurance circuit's best lap
 	goal: number, banks: number, codes: { [string]: boolean }, -- the next goal (Config.Goals), times banked, codes used
-	settings: { music: boolean, sfx: boolean, reduceMotion: boolean? },
+	settings: { music: boolean, sfx: boolean, reduceMotion: boolean?, tutorialDismissed: boolean? },
 	welcomed: boolean, -- has seen the first-visit card
 	rares: { [string]: number }, -- rare parts collected, all seasons (the garage's case shows them)
 	likes: number, likedOn: { [string]: number }, -- likes this garage has had; whose garages this player liked today
@@ -165,6 +166,7 @@ type State = {
 	leaving: boolean, released: boolean, -- the leaving save is under way / has let go of the lock
 	unlogged: number, -- factory income not yet sent to analytics (sent once a minute)
 	giftAt: number, lastRedeem: number, -- server time the next gift is ready; last code tried (os.clock)
+	firstSession: boolean, gifts: number, -- presentation counters, never supplied by a client
 	lastSetting: number?, -- last settings change (os.clock), not part of the save
 	lastCrate: number, -- last crew crate opened (os.clock)
 }
@@ -374,6 +376,11 @@ local function publish(player: Player)
 		player:SetAttribute("GoalReward", math.floor(rewardOf(st, goal.minutes, goal.floor)))
 	end
 	player:SetAttribute("GiftAt", st.giftAt)
+	-- One snapshot prevents partially replicated counters from advancing the tracker.
+	player:SetAttribute("Onboarding", HttpService:JSONEncode({
+		firstSession = st.firstSession, dismissed = st.data.settings.tutorialDismissed == true,
+		stats = { purchases = purchasesOf(st), banks = st.data.banks, crew = crewHired(st), laps = st.data.laps, gifts = st.gifts },
+	}))
 	player:SetAttribute("MusicOn", st.data.settings.music ~= false)
 	player:SetAttribute("Welcome", not st.data.welcomed)
 	player:SetAttribute("RareGold", st.data.rares.Gold or 0)
@@ -1236,10 +1243,12 @@ local function lapDone(player: Player, seconds: number, layout: string)
 	checkGoals(player)
 end
 
-welcomed.OnServerEvent:Connect(function(player)
+welcomed.OnServerEvent:Connect(function(player, dismiss)
 	local st = states[player]
-	if st and not st.data.welcomed then
+	-- Dismissing UI is the only client-owned state; progress and rewards stay server-owned.
+	if st and (not st.data.welcomed or (dismiss == true and not st.data.settings.tutorialDismissed)) then
 		st.data.welcomed = true
+		if dismiss == true then st.data.settings.tutorialDismissed = true end
 		st.dirty = true
 		publish(player)
 	end
@@ -1270,6 +1279,7 @@ claimGift.OnServerEvent:Connect(function(player)
 	end
 	local reward = rewardOf(st, Config.Gift.minutes, Config.Gift.floor)
 	st.giftAt = now + Config.Gift.everyMinutes * 60
+	st.gifts += 1
 	addCash(player, reward)
 	effect:FireClient(player, "banked", reward)
 	notify:FireClient(player, "Gift: +" .. money(reward))
@@ -1419,6 +1429,7 @@ local function onPlayerAdded(player: Player)
 	end
 	local st: State = {
 		data = data, plot = nil, pending = 0, canSave = canSave, passes = {}, dirty = false, friends = 0,
+		firstSession = Onboarding.isNewSave(data), gifts = 0,
 		leaving = false, released = false, unlogged = 0,
 		giftAt = workspace:GetServerTimeNow() + Config.Gift.everyMinutes * 60, lastRedeem = 0, lastCrate = 0,
 	}

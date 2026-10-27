@@ -152,6 +152,53 @@ do -- toasts start at the top of the inset-safe area, never at the panel/HUD cen
 	check("the expanded settings including Reduce motion stay above the thumbstick", settingsClear)
 end
 
+do -- The goal, gift and tracker share the right edge, below the desktop player list.
+	local listHeight = Layout.PlayerListHeight or 200
+	check("the desktop player list has a conservative reserved height", Layout.PlayerListHeight == 200)
+	local function overlaps(a: Layout.Rect, b: Layout.Rect): boolean
+		return a.left < b.right and a.right > b.left and a.top < b.bottom and a.bottom > b.top
+	end
+	for _, size in { { 810, 512, false }, { 1280, 720, false }, { 1920, 1080, false },
+		{ 844, 390, true }, { 1170, 540, true } } do
+		local width, height, touch = size[1] :: number, size[2] :: number, size[3] :: boolean
+		for _, insetTop in { 36, 60 } do
+			for _, insetBottom in { 0, 12 } do
+				local tag = ("%dx%d %s insets %d/%d"):format(width, height, touch and "touch" or "desktop", insetTop, insetBottom)
+				local s = Layout.scale(width, height)
+				local preferredTop = (height - insetTop - insetBottom) * 0.52 - Layout.GoalHeight * s / 2
+				local p = Layout.tracker(width, height, insetTop, insetBottom, touch, preferredTop, {}, false)
+				local stack = { left = p.x - Layout.GoalWidth * p.scale, right = p.x,
+					top = insetTop + p.y, bottom = insetTop + p.y + Layout.TrackerStackHeight * p.scale }
+				local list = { left = width - Layout.PlayerListWidth, right = width,
+					top = insetTop, bottom = insetTop + listHeight }
+				local thumbstick = { left = 0, right = width * 0.3, top = height * 0.62, bottom = height }
+				local jump = { left = width * 0.7, right = width, top = height * 0.62, bottom = height }
+				check(tag .. ": the stack fits and stays visible", p.visible)
+				check(tag .. ": right edge is 12 px from screen edge", p.x == width - 12, p.x)
+				check(tag .. ": the full stack stays inside the safe screen", not p.visible or
+					(stack.left >= 8 and stack.right <= width and stack.top >= insetTop + 8 and stack.bottom <= height - insetBottom - 8))
+				check(tag .. ": clears the desktop player-list rectangle", touch or not p.visible or not overlaps(stack, list))
+				check(tag .. ": desktop stack starts below the list with clearance", touch or not p.visible or stack.top >= list.bottom + 8)
+				check(tag .. ": clears the thumbstick corner", not touch or not p.visible or not overlaps(stack, thumbstick))
+				check(tag .. ": clears the jump corner", not touch or not p.visible or not overlaps(stack, jump))
+				local early = Layout.tracker(width, height, insetTop, insetBottom, touch, 8, {}, false)
+				check(tag .. ": a high preferred position moves below the desktop list", touch or
+					(early.visible and early.x == width - 12 and early.y >= listHeight + 8))
+			end
+		end
+	end
+	local short = Layout.tracker(810, 320, 60, 0, false, 8, {}, false)
+	check("desktop hides the tracker when the stack cannot fit below the list", not short.visible)
+	local insetBlocked = Layout.tracker(810, 512, 60, 80, false, 8, {}, false)
+	check("desktop bottom inset can leave too little room below the list", not insetBlocked.visible)
+	local obstacles = { { left = 570, right = 810, top = 260, bottom = 300 } }
+	local obstructed = Layout.tracker(810, 512, 60, 0, false, 8, obstacles, false)
+	check("desktop hides when an obstacle below the list leaves no room", not obstructed.visible)
+	check("tracker placement does not modify the caller's obstacles", #obstacles == 1)
+	local blockedTouch = Layout.tracker(844, 390, 60, 160, true, 8, {}, false)
+	check("touch hides when the bottom inset leaves no room", not blockedTouch.visible)
+end
+
 print(("%d passed, %d failed"):format(passed, failed))
 if failed > 0 then
 	error("layout tests failed")

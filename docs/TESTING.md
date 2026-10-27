@@ -16,6 +16,16 @@ sound loads and that banking shows a +$ pop-up. It prints PASS or FAIL for each 
 errors the game logged, then removes the plugin. It never publishes anything. The latest place
 file is a CI artifact (`PitLaneTycoon-place`) on every run.
 
+With `--shots DIR`, the smoke run saves `tracker.png` as well as the existing
+`studio-play.png`. After the server checks the welcome card and gift countdown, it creates
+`PLT_TrackerShot` and waits. The client closes the welcome card and fires `Welcomed` without
+dismissing the tutorial, waits for the visible `FirstSteps` card to say `FIRST STEPS  1 / 5`,
+and checks its bounds against the goal panel, bottom-left thumbstick area and desktop player
+list. It prints `[PLT-TEST] SHOT tracker` and holds that state for six seconds before signalling
+the server to continue. `run.py` reads the named marker and captures the Studio window to
+`DIR/tracker.png`; the later bare `SHOT` still saves `DIR/studio-play.png` with the crew panel
+open. The server cannot buy a machine or start the drive/crew stages during the tracker shot.
+
 A new player gets the welcome card, and buying a machine puts it away. A collected Gold part
 goes into the team's collection case, and the sign carries a Like prompt (likes between two
 players can't be played in a one-player Studio test; `tests/Likes.spec.luau` checks the rules). A live event started by
