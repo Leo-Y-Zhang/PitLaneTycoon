@@ -8,18 +8,23 @@ local RunService = game:GetService("RunService")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local DayNight = require(Shared:WaitForChild("DayNight"))
 local Config = require(Shared:WaitForChild("Config"))
+local SceneryStyle = require(Shared:WaitForChild("SceneryStyle"))
 local TrackShape = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("TrackShape"))
 
 local Scenery = {}
 
-Scenery.Teams = {
-	{ name = "Scarlet", colour = Color3.fromRGB(214, 32, 32) },
-	{ name = "Cobalt", colour = Color3.fromRGB(28, 86, 214) },
-	{ name = "Papaya", colour = Color3.fromRGB(255, 128, 0) },
-	{ name = "Racing Green", colour = Color3.fromRGB(0, 120, 72) },
-	{ name = "Violet", colour = Color3.fromRGB(120, 60, 200) },
-	{ name = "Teal", colour = Color3.fromRGB(0, 160, 170) },
+type Team = {
+	name: string, colour: Color3, secondary: Color3, emblem: string, facade: string,
+	style: SceneryStyle.Team,
 }
+local function rgb(value: SceneryStyle.RGB): Color3
+	return Color3.fromRGB(value.r, value.g, value.b)
+end
+Scenery.Teams = {} :: { Team }
+for _, style in SceneryStyle.Teams do
+	table.insert(Scenery.Teams, { name = style.name, colour = rgb(style.primary), secondary = rgb(style.secondary),
+		emblem = style.emblem, facade = style.facade, style = style })
+end
 
 local CARBON = Color3.fromRGB(22, 24, 28)
 local WALL = Color3.fromRGB(214, 218, 224)
@@ -41,6 +46,22 @@ local function block(parent: Instance, cf: CFrame, size: Vector3, colour: Color3
 	p.Material = material or Enum.Material.SmoothPlastic
 	p.Parent = parent
 	return p
+end
+
+-- Every recipe entry creates one decorative Part. RaceCar's existing weld loop handles it.
+local function details(parent: Instance, cf: CFrame, team: Team, recipe: { SceneryStyle.Detail }, night: boolean)
+	local palette: { [string]: Color3 } = {
+		primary = team.colour, secondary = team.secondary, carbon = CARBON, gold = Color3.fromRGB(255, 205, 60),
+	}
+	for _, detail in recipe do
+		local mat = if detail.colour == "gold" then Enum.Material.Metal
+			elseif night and detail.colour == "secondary" then Enum.Material.Neon else Enum.Material.SmoothPlastic
+		local part = block(parent, cf * CFrame.new(detail.x, detail.y, detail.z)
+			* CFrame.Angles(detail.rx, detail.ry, detail.rz), Vector3.new(detail.sx, detail.sy, detail.sz), palette[detail.colour], mat)
+		part.Name = "Detail_" .. detail.group
+		part.Massless = true
+		if detail.cylinder then part.Shape = Enum.PartType.Cylinder end
+	end
 end
 
 local function sign(part: BasePart, face: Enum.NormalId, text: string, colour: Color3)
@@ -385,7 +406,7 @@ local CONCRETE = Color3.fromRGB(196, 200, 206)
 local GRAPHITE = Color3.fromRGB(44, 48, 56)
 
 -- one piece of a team's garage, which goes up as the team buys machines (Config.GaragePieces)
-function Scenery.garagePiece(name: string, parent: Instance, cf: CFrame, team: { name: string, colour: Color3 },
+function Scenery.garagePiece(name: string, parent: Instance, cf: CFrame, team: Team,
 	theme: string?): Model
 	local m = Instance.new("Model")
 	m.Name = name
@@ -601,6 +622,12 @@ function Scenery.garagePiece(name: string, parent: Instance, cf: CFrame, team: {
 		local roofSign = p(0, 22.6, 24, 24, 3.6, 0.4, CARBON, Enum.Material.Metal)
 		sign(roofSign, Enum.NormalId.Front, string.upper(team.name) .. " RACING", team.colour)
 	end
+	local recipe = SceneryStyle.garageParts(team.style, name)
+	local counts = SceneryStyle.garageCounts(team.style)
+	assert(counts.total <= SceneryStyle.GaragePartBudget, "Garage identity exceeded its part allowance")
+	assert(#recipe == (counts.groups[name] or 0), "Garage identity count mismatch")
+	details(m, cf, team, recipe, night)
+	m:SetAttribute("DetailParts", #recipe)
 	m.Parent = parent
 	return m
 end
@@ -904,12 +931,15 @@ function Scenery.crewMember(parent: Instance, cf: CFrame, suit: Color3, band: Co
 	return head
 end
 
--- a show car built from parts; gold trim from season 2, a gold livery from season 4
+-- A shared show/race car: cumulative, decorative upgrades through season six.
 function Scenery.car(parent: Instance, cf: CFrame, colour: Color3, season: number, driver: boolean?): Model
 	local car = Instance.new("Model")
 	car.Name = "ShowCar"
-	local body = season >= 3 and Color3.fromRGB(212, 175, 55) or colour
-	local trim = season >= 1 and Color3.fromRGB(255, 205, 60) or CARBON
+	local team = Scenery.Teams[1]
+	for _, candidate in Scenery.Teams do
+		if candidate.colour == colour then team = candidate; break end
+	end
+	local body, trim = colour, CARBON
 	local function p(x: number, y: number, z: number, sx: number, sy: number, sz: number, c: Color3, m: Enum.Material?): Part
 		return block(car, cf * CFrame.new(x, y, z), Vector3.new(sx, sy, sz), c, m)
 	end
@@ -926,8 +956,6 @@ function Scenery.car(parent: Instance, cf: CFrame, colour: Color3, season: numbe
 		p(x, 1.0, 1.0, 0.9, 0.85, 3.4, body) -- sidepods
 	end
 	p(0, 1.75, -0.7, 0.85, 0.12, 1.5, CARBON) -- cockpit
-	p(0, 2.3, -0.8, 0.14, 0.14, 1.6, CARBON, Enum.Material.Metal) -- halo
-	p(0, 1.95, -1.55, 0.14, 0.75, 0.14, CARBON, Enum.Material.Metal)
 	p(0, 2.05, 2.0, 0.9, 1.2, 2.6, body) -- engine cover
 	p(0, 2.55, 0.8, 0.6, 0.5, 0.4, CARBON) -- airbox
 	p(0, 0.45, -5.8, 4.2, 0.14, 1.0, trim) -- front wing
@@ -939,7 +967,6 @@ function Scenery.car(parent: Instance, cf: CFrame, colour: Color3, season: numbe
 		p(x, 2.3, 4.7, 0.12, 1.5, 1.2, body)
 	end
 	p(0, 2.2, 4.4, 0.25, 1.2, 0.25, CARBON, Enum.Material.Metal)
-	p(0, 0.62, -5.45, 3.9, 0.12, 0.45, body) -- front wing flap
 	p(0, 3.2, 4.95, 3.3, 0.14, 0.45, body) -- rear wing flap
 	local function wedge(x: number, y: number, z: number, sx: number, sy: number, sz: number, c: Color3, turn: number)
 		local w = Instance.new("WedgePart")
@@ -955,7 +982,7 @@ function Scenery.car(parent: Instance, cf: CFrame, colour: Color3, season: numbe
 		p(x * 0.72, 1.0, -0.72, 0.5, 0.55, 0.06, CARBON) -- intakes
 	end
 	wedge(0, 2.05, 4.0, 0.9, 1.2, 1.6, body, math.pi) -- engine cover sloping to the rear
-	-- a thin carbon bar from a to b (suspension arms, the halo's sides, mirror stalks)
+	-- a thin carbon bar from a to b (suspension arms and mirror stalks)
 	local function bar(a: Vector3, b: Vector3, thick: number, c: Color3?)
 		local piece = block(car, cf * CFrame.lookAt((a + b) / 2, b), Vector3.new(thick, thick, (b - a).Magnitude),
 			c or CARBON, Enum.Material.Metal)
@@ -967,20 +994,17 @@ function Scenery.car(parent: Instance, cf: CFrame, colour: Color3, season: numbe
 		bar(Vector3.new(side * 0.55, 0.75, -2.8), Vector3.new(side * 1.5, 0.7, -3.3), 0.1)
 		bar(Vector3.new(side * 0.45, 1.6, 3.2), Vector3.new(side * 1.35, 1.4, 3.4), 0.1)
 		bar(Vector3.new(side * 0.45, 0.8, 3.0), Vector3.new(side * 1.35, 0.75, 3.4), 0.1)
-		-- the halo's arms from the cockpit sides up to its top bar
-		bar(Vector3.new(side * 0.45, 1.8, 0.15), Vector3.new(side * 0.12, 2.3, -0.25), 0.13)
 		-- mirrors on stalks
 		bar(Vector3.new(side * 0.95, 1.6, -1.7), Vector3.new(side * 1.3, 1.85, -1.75), 0.07)
 		p(side * 1.4, 1.88, -1.75, 0.35, 0.18, 0.14, body)
 	end
-	p(0, 0.78, -5.25, 3.7, 0.1, 0.4, trim) -- the front wing's second element
 	p(0, 1.6, 5.0, 2.5, 0.12, 0.4, CARBON) -- beam wing
 	for _, x in { -0.9, -0.3, 0.3, 0.9 } do
 		p(x, 0.8, 5.3, 0.08, 0.45, 0.9, CARBON) -- diffuser strakes
 	end
 	p(0, 2.86, 0.8, 0.55, 0.1, 0.2, Color3.fromRGB(255, 205, 60)) -- the T-cam on the airbox
 	if driver then
-		local helmet = p(0, 2.05, -0.75, 0.85, 0.85, 0.85, trim == CARBON and WHITE or trim)
+		local helmet = p(0, 2.05, -0.75, 0.85, 0.85, 0.85, WHITE)
 		helmet.Shape = Enum.PartType.Ball
 		p(0, 2.1, -1.15, 0.6, 0.22, 0.1, CARBON) -- visor
 	end
@@ -993,7 +1017,8 @@ function Scenery.car(parent: Instance, cf: CFrame, colour: Color3, season: numbe
 			local discs = {
 				{ proud = 0.02, size = 0.86, colour = WHITE, metal = false },
 				{ proud = 0.04, size = 0.76, colour = CARBON, metal = false },
-				{ proud = 0.06, size = 0.55, colour = trim, metal = true },
+				-- Recess the carbon lip slightly under the season-six gold hub, avoiding coplanar faces.
+				{ proud = if season >= 6 then 0.05 else 0.06, size = 0.55, colour = trim, metal = true },
 			}
 			for _, disc in discs do
 				local d = p(x, w[2] / 2, w[1], w[3] + disc.proud, w[2] * disc.size, w[2] * disc.size, disc.colour,
@@ -1002,6 +1027,10 @@ function Scenery.car(parent: Instance, cf: CFrame, colour: Color3, season: numbe
 			end
 		end
 	end
+	local recipe = SceneryStyle.carParts(team.style, season)
+	assert(#recipe <= SceneryStyle.CarPartBudget, "Car detail exceeded its part allowance")
+	details(car, cf, team, recipe, false)
+	car:SetAttribute("DetailParts", #recipe)
 	car.Parent = parent
 	return car
 end
