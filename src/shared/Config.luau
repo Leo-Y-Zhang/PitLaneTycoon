@@ -3,6 +3,9 @@
 
 local Config = {}
 
+-- Server clock: freeze at Lighting.ClockTime for staging; Studio PhotoMode also freezes it.
+Config.DayNight = { Frozen = false }
+
 -- Game pass and developer product ids. Create them on the Creator Dashboard
 -- (Monetization) after publishing, paste the ids here, and rebuild. 0 = not set up yet:
 -- the shop hides that item and the server treats nobody as owning it.

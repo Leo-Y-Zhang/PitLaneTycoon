@@ -184,6 +184,7 @@ function Circuit.build(): Folder
 				light.Shadows = false
 				light.Parent = bank
 			end
+			Scenery.nightLamp(bank)
 		end
 	end
 
