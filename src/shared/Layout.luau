@@ -90,4 +90,36 @@ function Layout.toastHudTop(scale: number, count: number): number
 	return Layout.ToastMargin * 2 + (count * Layout.ToastHeight + (count - 1) * Layout.ToastGap) * scale
 end
 
+-- A single first-session card below the goal panel. The pair moves as one so
+-- landscape phones can keep both above the thumbstick/jump corners. If the HUD
+-- or an open panel leaves no safe space, hold the tracker until there is room.
+Layout.GoalWidth = 230
+Layout.GoalHeight = 150
+Layout.TrackerHeight = 72
+Layout.TrackerGap = 8
+Layout.TrackerStackHeight = Layout.GoalHeight + Layout.TrackerGap + Layout.TrackerHeight
+export type Rect = { left: number, top: number, right: number, bottom: number }
+export type TrackerPlacement = { x: number, y: number, scale: number, visible: boolean }
+function Layout.tracker(width: number, height: number, insetTop: number, insetBottom: number,
+	touch: boolean, preferredTop: number, obstacles: { Rect }, panelOpen: boolean): TrackerPlacement
+	local s = Layout.scale(width, height)
+	local right = width - 12 - (if touch then 0 else Layout.PlayerListWidth)
+	local left = right - Layout.GoalWidth * s
+	local limit = math.min(height - insetBottom, if touch then height * 0.62 else height)
+	local maxY = limit - insetTop - Layout.TrackerStackHeight * s - 8
+	local y = math.max(8, math.min(preferredTop, maxY))
+	for _ = 1, #obstacles + 1 do
+		local moved = false
+		for _, rect in obstacles do
+			if left < rect.right + 8 and right > rect.left - 8
+				and insetTop + y < rect.bottom + 8 and insetTop + y + Layout.TrackerStackHeight * s > rect.top - 8 then
+				y = rect.bottom - insetTop + 8
+				moved = true
+			end
+		end
+		if not moved then break end
+	end
+	return { x = right, y = y, scale = s, visible = not panelOpen and left >= 8 and y <= maxY }
+end
+
 return Layout
