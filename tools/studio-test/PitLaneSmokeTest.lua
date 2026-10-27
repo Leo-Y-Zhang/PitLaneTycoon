@@ -470,6 +470,52 @@ if RunService:IsClient() then
 		local card = hud:FindFirstChild("Welcome") :: Frame?
 		clientCheck("the welcome card shows on a first visit", card and (card.Visible or player:GetAttribute("Welcome") == false))
 		clientCheck("the gift counts down", giftText, giftText)
+		-- The server holds all purchases until this shot has had the same six-second
+		-- capture window as studio-play. No panel has opened yet.
+		local trackerShot = game:GetService("ReplicatedStorage"):WaitForChild("PLT_TrackerShot", 30) :: RemoteEvent?
+		if card then card.Visible = false end
+		game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Welcomed"):FireServer()
+		local tracker = hud:FindFirstChild("FirstSteps") :: Frame?
+		local ready = waitFor(function()
+			if not tracker or not tracker.Visible or tracker.AbsoluteSize.Y <= 0
+				or player:GetAttribute("Welcome") ~= false or (card and card.Visible) then
+				return false
+			end
+			for _, label in tracker:GetChildren() do
+				if label:IsA("TextLabel") and label.Text == "FIRST STEPS  1 / 5" then
+					return true
+				end
+			end
+			return false
+		end, 10)
+		local goal = hud:FindFirstChild("GoalPanel") :: Frame?
+		local trackerView = workspace.CurrentCamera.ViewportSize
+		local trackerLayout = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Layout"))
+		local trackerInset = game:GetService("GuiService"):GetGuiInset()
+		local inputs = game:GetService("UserInputService")
+		local trackerPhone = inputs.TouchEnabled and not inputs.KeyboardEnabled
+		local right = tracker and tracker.AbsolutePosition.X + tracker.AbsoluteSize.X or 0
+		-- Hud uses IgnoreGuiInset = false and applies Layout.tracker's safe-area y
+		-- directly to Position. Match Layout's insetTop + y conversion: add the inset
+		-- once to AbsolutePosition.Y so all vertical bounds below are viewport pixels.
+		local goalTop = goal and trackerInset.Y + goal.AbsolutePosition.Y or 0
+		local trackerTop = tracker and trackerInset.Y + tracker.AbsolutePosition.Y or 0
+		local bottom = tracker and trackerTop + tracker.AbsoluteSize.Y or 0
+		local playerListBottom = trackerInset.Y + trackerLayout.PlayerListHeight
+		clientCheck("the step 1 tracker is visible at the right edge and clear of the goal, touch corners and player list",
+			ready and tracker and goal and goal.Visible and tracker.AbsoluteSize.X > 0
+				and trackerTop >= goalTop + goal.AbsoluteSize.Y
+				and tracker.AbsolutePosition.X >= 0 and right <= trackerView.X and bottom <= trackerView.Y
+				and math.abs(right - (trackerView.X - 12)) <= 1
+				and (not trackerPhone or bottom <= trackerView.Y * 0.62)
+				and (trackerPhone or goalTop >= playerListBottom + 8),
+			("right edge %d of %d, viewport Y: goal top %d, inset Y %d, player-list bottom %d, tracker bottom %d of %d")
+				:format(right, trackerView.X, goalTop, trackerInset.Y, playerListBottom, bottom, trackerView.Y))
+		if ready then
+			print(TAG, "SHOT tracker") -- run.py saves tracker.png alongside studio-play.png
+			task.wait(6)
+		end
+		if trackerShot then trackerShot:FireServer() end
 		game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("ClaimGift"):FireServer()
 		clientCheck("a gift claimed early is refused", waitFor(function()
 			for _, d in hud:GetDescendants() do
@@ -968,6 +1014,19 @@ local function run()
 		player:GetAttribute("GoalText"))
 	local giftIn = (player:GetAttribute("GiftAt") or 0) - workspace:GetServerTimeNow()
 	check("the first gift is ten minutes away", giftIn > 540 and giftIn <= 600, math.floor(giftIn))
+
+	-- Signal only after the welcome checks above. Keep step 1 unchanged until the
+	-- client closes the welcome card, checks the tracker and holds it for capture.
+	local trackerShot = Instance.new("RemoteEvent")
+	trackerShot.Name = "PLT_TrackerShot"
+	local trackerDone = false
+	trackerShot.OnServerEvent:Connect(function(from)
+		if from == player then trackerDone = true end
+	end)
+	trackerShot.Parent = game:GetService("ReplicatedStorage")
+	local capturedTracker = waitFor(function() return trackerDone end, 45)
+	trackerShot:Destroy()
+	assert(capturedTracker, "the client did not finish the tracker shot")
 
 	local character = waitFor(function()
 		local c = player.Character

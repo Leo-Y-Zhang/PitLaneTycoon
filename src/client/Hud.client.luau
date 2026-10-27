@@ -16,6 +16,7 @@ local UserInputService = game:GetService("UserInputService")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Feedback = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HudFeedback"))
 local Icons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Icons"))
+local Onboarding = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Onboarding"))
 local Layout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Layout"))
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
 local player = Players.LocalPlayer
@@ -91,6 +92,7 @@ end
 -- the panels that open in the middle: on a computer they keep clear of the player list
 local panels: { { frame: GuiObject, width: number, scale: UIScale } } = {}
 local renderToasts: () -> () = function() end
+local refreshTracker: () -> () = function() end
 local modalFrames: { GuiObject } = {}
 local function watchModal(o: GuiObject)
 	table.insert(modalFrames, o)
@@ -370,6 +372,7 @@ renderToasts = function()
 			card.label.LayoutOrder = row
 		end
 	end
+	refreshTracker()
 end
 local function showToast(text: string)
 	Feedback.enqueue(toastQueue, text, os.clock(), placeToasts())
@@ -845,6 +848,14 @@ local guide = new("Beam", {
 	LightEmission = 1, Color = ColorSequence.new(Color3.fromRGB(255, 205, 60)), Transparency = NumberSequence.new(0.35),
 }, workspace)
 local guideFrom: Attachment?, guideTo: Attachment? = nil, nil
+local onboardingRunning = false
+local onboardingTarget: string? = nil
+-- A local highlight never changes a pad's server-owned appearance or touchability.
+local padPulse = new("Highlight", {
+	Name = "FirstMachinePulse", Enabled = false, FillColor = Color3.fromRGB(255, 205, 60),
+	OutlineColor = Color3.fromRGB(255, 205, 60), FillTransparency = 0.8, OutlineTransparency = 0,
+	DepthMode = Enum.HighlightDepthMode.Occluded,
+}, workspace)
 
 local function myPlot(): Instance?
 	local index = player:GetAttribute("Plot") or 0
@@ -871,13 +882,23 @@ local function refreshGuide()
 	local key, cost = player:GetAttribute("NextKey") or "", player:GetAttribute("NextCost") or 0
 	local cash, pending = cashNow(), player:GetAttribute("Pending") or 0
 	local target: Instance? = nil
-	if plot and root and key ~= "" then
+	if onboardingRunning then
+		if plot and onboardingTarget == "pad" and key ~= "" then
+			-- The server exposes exactly one buyable pad, the next unlocked machine.
+			target = plot:FindFirstChild("Buy_" .. key)
+		elseif plot and onboardingTarget == "collector" then
+			target = plot:FindFirstChild("CollectPad")
+		end
+	elseif plot and root and key ~= "" then
 		if cash >= cost then
 			target = plot:FindFirstChild("Buy_" .. key)
 		elseif cash + pending >= cost then
 			target = plot:FindFirstChild("CollectPad")
 		end
 	end
+	padPulse.Adornee = if onboardingRunning and onboardingTarget == "pad" then target else nil
+	padPulse.Enabled = padPulse.Adornee ~= nil
+	padPulse.FillTransparency = 0.85 - 0.3 * Onboarding.pulse(reduceMotion(), os.clock())
 	if not (target and root) then
 		guide.Enabled = false
 		return
@@ -955,9 +976,9 @@ remotes:WaitForChild("Effect").OnClientEvent:Connect(function(kind: string, arg:
 	end
 end)
 
--- the first visit: three lines on how the game works, until "Let's go" or the first buy --
+-- A brief welcome; the compact tracker teaches each action where it happens. ---------
 local welcome = new("Frame", {
-	Name = "Welcome", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(440, 250),
+	Name = "Welcome", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(440, 150),
 	BackgroundColor3 = PANEL, BackgroundTransparency = 0.05, Visible = false,
 }, gui)
 round(welcome, 14)
@@ -967,17 +988,10 @@ new("TextLabel", {
 	Position = UDim2.fromOffset(18, 12), Size = UDim2.new(1, -36, 0, 34), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack,
 	TextSize = 22, TextColor3 = INK, Text = "Welcome to your garage",
 }, welcome)
-for i, line in {
-	"Your presses make car parts. They ride the conveyor to scrutineering and earn cash.",
-	"Bank the cash on the blue pad, then step on the red pad to buy the next machine.",
-	"Press Race any time to drive your team's car round the track.",
-} do
-	new("TextLabel", {
-		Position = UDim2.fromOffset(18, 52 + (i - 1) * 44), Size = UDim2.new(1, -36, 0, 40), BackgroundTransparency = 1,
-		Font = Enum.Font.Gotham, TextSize = 15, TextWrapped = true, TextColor3 = INK, TextXAlignment = Enum.TextXAlignment.Left,
-		Text = i .. ".  " .. line,
-	}, welcome)
-end
+new("TextLabel", {
+	Position = UDim2.fromOffset(18, 50), Size = UDim2.new(1, -36, 0, 30), BackgroundTransparency = 1,
+	Font = Enum.Font.Gotham, TextSize = 16, TextColor3 = INK, Text = "Follow the glow. Build your racing team.",
+}, welcome)
 local letsGo = button("Let's go", GREEN, welcome)
 letsGo.AnchorPoint = Vector2.new(0.5, 1)
 letsGo.Position = UDim2.new(0.5, 0, 1, -14)
@@ -1025,6 +1039,164 @@ Icons.button(giftButton, "gift", INK)
 giftButton.Activated:Connect(function()
 	remotes:WaitForChild("ClaimGift"):FireServer()
 end)
+
+-- First-session teaching: no client claim can complete a step or pay a reward.
+local tracker = new("Frame", {
+	Name = "FirstSteps", Size = UDim2.fromOffset(Layout.GoalWidth, Layout.TrackerHeight),
+	AnchorPoint = Vector2.new(1, 0), BackgroundColor3 = PANEL, Visible = false,
+}, gui)
+round(tracker, 10)
+new("UIStroke", { Color = Color3.fromRGB(255, 205, 60), Thickness = 1 }, tracker)
+local trackerScale = new("UIScale", {}, tracker)
+local trackerTitle = new("TextLabel", {
+	Position = UDim2.fromOffset(10, 8), Size = UDim2.new(1, -48, 0, 14), BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBold, TextSize = 11, TextColor3 = Color3.fromRGB(255, 205, 60),
+	TextXAlignment = Enum.TextXAlignment.Left, Text = "FIRST STEPS",
+}, tracker)
+local trackerText = new("TextLabel", {
+	Position = UDim2.fromOffset(10, 27), Size = UDim2.new(1, -20, 0, 20), BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBold, TextScaled = true, TextColor3 = INK, TextXAlignment = Enum.TextXAlignment.Left, Text = "",
+}, tracker)
+new("UITextSizeConstraint", { MaxTextSize = 15 }, trackerText)
+local trackerHint = new("TextLabel", {
+	Position = UDim2.fromOffset(10, 49), Size = UDim2.new(1, -20, 0, 16), BackgroundTransparency = 1,
+	Font = Enum.Font.Gotham, TextScaled = true, TextColor3 = Color3.fromRGB(180, 186, 196),
+	TextXAlignment = Enum.TextXAlignment.Left, Text = "",
+}, tracker)
+new("UITextSizeConstraint", { MaxTextSize = 12 }, trackerHint)
+local skip = button("X", Color3.fromRGB(60, 64, 70), tracker)
+skip.Name = "Skip"
+skip.Size = UDim2.fromOffset(32, 26)
+skip.Position = UDim2.new(1, -36, 0, 4)
+skip.TextSize = 14
+local pointer = new("Frame", {
+	Name = "StepGuide", AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = Color3.fromRGB(255, 205, 60),
+	BorderSizePixel = 0, Visible = false,
+}, gui)
+local pointerTip = new("Frame", {
+	Name = "StepGuideTip", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(8, 8), Rotation = 45,
+	BackgroundColor3 = Color3.fromRGB(255, 205, 60), BorderSizePixel = 0, Visible = false,
+}, gui)
+local buttonPulses: { [GuiObject]: UIStroke } = {}
+for _, b in { crewButton, raceButton, giftButton } do
+	buttonPulses[b] = new("UIStroke", { Color = Color3.fromRGB(255, 205, 60), Thickness = 2,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Enabled = false }, b)
+end
+local startedAt: number? = nil
+local dismissed = false
+local announced: { boolean } = { false, false, false, false, false }
+local snapshotText: string? = nil
+local snapshot: { firstSession: boolean, dismissed: boolean, stats: Onboarding.Stats }? = nil
+local function dismissTracker()
+	if dismissed then return end
+	dismissed = true
+	remotes:WaitForChild("Welcomed"):FireServer(true)
+end
+skip.Activated:Connect(function()
+	dismissTracker()
+	refreshTracker()
+end)
+local function rect(o: GuiObject): Layout.Rect
+	return { left = o.AbsolutePosition.X, top = o.AbsolutePosition.Y,
+		right = o.AbsolutePosition.X + o.AbsoluteSize.X, bottom = o.AbsolutePosition.Y + o.AbsoluteSize.Y }
+end
+refreshTracker = function()
+	local raw = player:GetAttribute("Onboarding")
+	if type(raw) == "string" and raw ~= snapshotText then
+		local ok, value = pcall(function() return HttpService:JSONDecode(raw) end)
+		if ok then snapshot = value; snapshotText = raw end
+	end
+	local state = snapshot
+	if state and state.firstSession and player:GetAttribute("Welcome") == false and not startedAt then
+		startedAt = os.clock()
+	end
+	local step = if state then Onboarding.step(state.stats) else nil
+	local elapsed = if startedAt then os.clock() - startedAt else 0
+	local active = state ~= nil and startedAt ~= nil
+		and Onboarding.active(state.firstSession, dismissed or state.dismissed, elapsed, step)
+	-- A completion toast describes the confirmed event; existing server goal/lap/gift
+	-- toasts describe any reward. Nothing here invents a payout or repeats a goal.
+	if state and startedAt and not dismissed and not state.dismissed and elapsed < 600 then
+		for i, done in Onboarding.completed(state.stats) do
+			if done and not announced[i] then
+				announced[i] = true
+				local message = ("Step %d done: %s"):format(i, Onboarding.Steps[i])
+				task.defer(showToast, message)
+			end
+		end
+		if not step then dismissTracker() end
+	end
+	if startedAt and elapsed >= 600 then dismissTracker() end
+	local view = workspace.CurrentCamera.ViewportSize
+	local insetTop, insetBottom = GuiService:GetGuiInset()
+	local phone = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+	local panelOpen = player:GetAttribute("Driving") == true
+	for _, frame in modalFrames do
+		if frame.Visible then panelOpen = true end
+	end
+	local obstacles = { rect(top), rect(bar) }
+	if eventBar.Visible then table.insert(obstacles, rect(eventBar)) end
+	if host.Visible and #toastQueue.visible > 0 then
+		table.insert(obstacles, { left = host.AbsolutePosition.X, top = insetTop.Y,
+			right = host.AbsolutePosition.X + host.AbsoluteSize.X,
+			bottom = insetTop.Y + Layout.toastHudTop(toastScale.Scale, #toastQueue.visible) })
+	end
+	local placement = Layout.tracker(view.X, view.Y, insetTop.Y, insetBottom.Y, phone,
+		gui.AbsoluteSize.Y * 0.52 - Layout.GoalHeight * Layout.scale(view.X, view.Y) / 2, obstacles, panelOpen)
+	tracker.Visible = active and placement.visible
+	if tracker.Visible then
+		goals.AnchorPoint = Vector2.new(1, 0)
+		goals.Position = UDim2.fromOffset(placement.x, placement.y)
+		tracker.Position = UDim2.fromOffset(placement.x, placement.y + (Layout.GoalHeight + Layout.TrackerGap) * placement.scale)
+		trackerScale.Scale = placement.scale
+	else
+		goals.AnchorPoint = Vector2.new(1, 0.5)
+		goals.Position = UDim2.new(1, -12, 0.52, 0)
+	end
+	onboardingRunning = active
+	onboardingTarget = nil
+	local targetButton: GuiObject? = nil
+	if active and step then
+		local ready = (player:GetAttribute("GiftAt") or math.huge) <= workspace:GetServerTimeNow()
+		local unlocked = player:GetAttribute("CrewUnlocked") == true
+		local pending = player:GetAttribute("Pending") or 0
+		trackerTitle.Text = ("FIRST STEPS  %d / 5"):format(step)
+		trackerText.Text = if step == 5 and not ready then "Gift on its way" else Onboarding.Steps[step]
+		trackerHint.Text = if step == 3 and not unlocked then ("Buy %d machines to unlock crew"):format(Config.Crew.unlockPurchases)
+			elseif step == 5 and not ready then giftButton.Text
+			elseif step == 2 and pending == 0 then "Your machines are earning cash"
+			elseif step == 4 and player:GetAttribute("Driving") == true then "Follow the track for a clean lap"
+			else "Follow the gold guide"
+		if not panelOpen then
+			onboardingTarget = Onboarding.target(step, (player:GetAttribute("NextKey") or "") ~= ""
+				and cashNow() >= (player:GetAttribute("NextCost") or math.huge), pending, unlocked, ready)
+		end
+		if onboardingTarget == "crew" then targetButton = crewButton
+		elseif onboardingTarget == "race" then targetButton = raceButton
+		elseif onboardingTarget == "gift" then targetButton = giftButton end
+	end
+	for b, stroke in buttonPulses do
+		stroke.Enabled = b == targetButton
+		stroke.Transparency = 0.5 * Onboarding.pulse(reduceMotion(), os.clock())
+	end
+	pointer.Visible = tracker.Visible and targetButton ~= nil
+	pointerTip.Visible = pointer.Visible
+	if pointer.Visible and targetButton then
+		local origin = tracker.AbsolutePosition + Vector2.new(0, tracker.AbsoluteSize.Y / 2)
+		local destination = targetButton.AbsolutePosition + Vector2.new(targetButton.AbsoluteSize.X + 6, targetButton.AbsoluteSize.Y / 2)
+		if targetButton == giftButton then
+			origin = tracker.AbsolutePosition + Vector2.new(tracker.AbsoluteSize.X / 2, -2)
+			destination = targetButton.AbsolutePosition + Vector2.new(targetButton.AbsoluteSize.X / 2, targetButton.AbsoluteSize.Y + 3)
+		end
+		local delta = destination - origin
+		local midpoint = (origin + destination) / 2
+		pointer.Position = UDim2.fromOffset(midpoint.X - insetTop.X, midpoint.Y - insetTop.Y)
+		pointer.Size = UDim2.fromOffset(delta.Magnitude, 2)
+		pointer.Rotation = math.deg(math.atan2(delta.Y, delta.X))
+		pointerTip.Position = UDim2.fromOffset(destination.X - insetTop.X, destination.Y - insetTop.Y)
+	end
+	refreshGuide()
+end
 
 local function lapText(seconds: number): string
 	return ("%d:%05.2f"):format(seconds // 60, seconds % 60)
@@ -1089,6 +1261,7 @@ local function refreshAll()
 	refreshCrew()
 	welcome.Visible = player:GetAttribute("Welcome") == true
 	hideOwnLike()
+	refreshTracker()
 end
 player.AttributeChanged:Connect(refreshAll)
 workspace:GetAttributeChangedSignal("HappyHour"):Connect(refreshTop)
