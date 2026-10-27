@@ -74,7 +74,8 @@ def screen_locked() -> bool:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("place", type=Path)
-    ap.add_argument("--shots", type=Path, help="save a screenshot of the Studio window here (it shows your avatar)")
+    ap.add_argument("--shots", type=Path,
+                    help="save Studio window screenshots here (smoke: tracker.png and studio-play.png; shows your avatar)")
     ap.add_argument("--timeout", type=int, default=420)
     ap.add_argument("--keep-open", action="store_true", help="leave the Studio window open afterwards")
     ap.add_argument("--audio", action="store_true",
