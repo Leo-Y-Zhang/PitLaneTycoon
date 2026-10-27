@@ -4,6 +4,10 @@
 -- Pure decoration, built from code like everything else; nothing here touches money.
 
 local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local DayNight = require(Shared:WaitForChild("DayNight"))
+local Config = require(Shared:WaitForChild("Config"))
 local TrackShape = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("TrackShape"))
 
 local Scenery = {}
@@ -58,6 +62,19 @@ end
 Scenery.block = block
 Scenery.sign = sign
 
+-- Only actual lamp faces register; race lights, signs and machine indicators stay independent.
+local lamps = setmetatable({} :: { [BasePart]: boolean }, { __mode = "k" })
+local function switchLamp(lamp: BasePart, night: boolean)
+	lamp.Material = if night then Enum.Material.Neon else Enum.Material.SmoothPlastic
+	for _, child in lamp:GetDescendants() do
+		if child:IsA("Light") then child.Enabled = night end
+	end
+end
+function Scenery.nightLamp(lamp: BasePart)
+	lamps[lamp] = true
+	switchLamp(lamp, DayNight.isNight(Lighting.ClockTime))
+end
+
 function Scenery.lighting()
 	Lighting.Ambient = Color3.fromRGB(70, 74, 82)
 	Lighting.OutdoorAmbient = Color3.fromRGB(128, 132, 140)
@@ -81,6 +98,34 @@ function Scenery.lighting()
 	local rays = Instance.new("SunRaysEffect")
 	rays.Intensity = 0.04
 	rays.Parent = Lighting
+	local night: boolean? = nil
+	local function updateLamps()
+		local nextNight = DayNight.isNight(Lighting.ClockTime)
+		if night == nextNight then return end
+		night = nextNight
+		-- Less haze and a floor of ambient light keep the conveyor and road readable at night.
+		atmosphere.Density = if nextNight then 0.2 else 0.28
+		atmosphere.Haze = if nextNight then 0.6 else 1.2
+		Lighting.Ambient = if nextNight then Color3.fromRGB(85, 91, 108) else Color3.fromRGB(70, 74, 82)
+		Lighting.OutdoorAmbient = if nextNight then Color3.fromRGB(110, 118, 138) else Color3.fromRGB(128, 132, 140)
+		for lamp in pairs(lamps) do
+			if lamp:IsDescendantOf(workspace) then switchLamp(lamp, nextNight)
+			else lamps[lamp] = nil end
+		end
+	end
+	updateLamps()
+	-- One slow loop, elapsed-time based so scheduler stalls cannot slow the twenty-minute day.
+	task.spawn(function()
+		local previous = os.clock()
+		while true do
+			task.wait(0.5)
+			local now = os.clock()
+			local frozen = DayNight.frozen(Config.DayNight.Frozen, RunService:IsStudio(), workspace:GetAttribute("PhotoMode") == true)
+			if not frozen then Lighting.ClockTime = DayNight.advance(Lighting.ClockTime, now - previous, false) end
+			previous = now
+			updateLamps()
+		end
+	end)
 end
 
 -- the spawn: a red-and-white kerb ring, pit-lane lines to every garage, a title gantry
@@ -237,6 +282,7 @@ function Scenery.paddock(plotCount: number, plotRadius: number, frontGap: number
 					light.Brightness, light.Range, light.Angle = 1.5, 32, 110
 					light.Parent = lamp
 				end
+				Scenery.nightLamp(lamp)
 			end
 		end
 		assert(partCount <= PaddockLayout.Specs[placement.kind].parts, "Paddock prop exceeded its part allowance")
@@ -442,6 +488,7 @@ function Scenery.garagePiece(name: string, parent: Instance, cf: CFrame, team: {
 			light.Face = Enum.NormalId.Bottom
 			light.Range, light.Angle, light.Brightness = 26, 110, 1.6
 			light.Parent = strip
+			Scenery.nightLamp(strip)
 		end
 		for _, x in { -30, 30 } do -- floodlight masts at the front corners
 			p(x, 8, -24, 0.6, 16, 0.6, CARBON, Enum.Material.Metal)
@@ -450,6 +497,7 @@ function Scenery.garagePiece(name: string, parent: Instance, cf: CFrame, team: {
 			light.Face = Enum.NormalId.Back
 			light.Range, light.Angle, light.Brightness = 40, 70, 1.2
 			light.Parent = head
+			Scenery.nightLamp(head)
 		end
 	elseif name == "PitWall" then
 		for _, x in { -22, 22 } do -- either side of the way in
@@ -724,6 +772,7 @@ function Scenery.shelf(parent: Instance, cf: CFrame, gold: number, rainbow: numb
 			light.Shadows = false
 			light.Parent = strip
 		end
+		Scenery.nightLamp(strip)
 	end
 	local glass = p(0, 2.75, -0.84, 8.4, 3.9, 0.06, Color3.fromRGB(205, 226, 235), Enum.Material.Glass)
 	glass.Transparency = 0.86
@@ -744,7 +793,8 @@ function Scenery.shelf(parent: Instance, cf: CFrame, gold: number, rainbow: numb
 					p(x, deck + 0.035, side * 0.43, 1.14, 0.04, 0.035, STEEL, Enum.Material.Metal).Transparency = 0.65
 				end
 			else
-				p(x, deck + 0.07, 0, 1.18, 0.14, 1, CARBON, Enum.Material.Metal)
+				local plinth = p(x, deck + 0.07, 0, 1.18, 0.14, 1, CARBON, Enum.Material.Metal)
+				plinth.Name = (if level == 1 then "Rainbow" else "Gold") .. "Slot" .. slot
 				p(x, deck + 0.22, 0.12, 0.2, 0.2, 0.35, STEEL, Enum.Material.Metal)
 				if level == 2 then
 					local y = deck + 0.88
@@ -778,6 +828,8 @@ function Scenery.shelf(parent: Instance, cf: CFrame, gold: number, rainbow: numb
 		end
 	end
 	-- Full case: 126 Parts; empty positions use fewer Parts than an occupied plinth.
+	m:SetAttribute("Gold", gold)
+	m:SetAttribute("Rainbow", rainbow)
 	m.Parent = parent
 	return m
 end

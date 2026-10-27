@@ -1,7 +1,7 @@
 --!strict
 -- Pit Lane Tycoon HUD: cash and income, the next purchase, the shop (and redeem codes), the
 -- race, crew and new-season buttons, the pit crew and its crates, the current goal and the
--- gift for staying, toasts, and the guide line, sparks and "+$" pop-ups that show where to go
+-- gift for staying, toasts, and the guide line and "+$" pop-ups that show where to go
 -- next.
 
 local Players = game:GetService("Players")
@@ -9,7 +9,6 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local MarketplaceService = game:GetService("MarketplaceService")
 local TweenService = game:GetService("TweenService")
-local Debris = game:GetService("Debris")
 local GuiService = game:GetService("GuiService")
 
 local UserInputService = game:GetService("UserInputService")
@@ -895,18 +894,6 @@ local function refreshGuide()
 	guide.Enabled = true
 end
 
-local function sparks(at: BasePart)
-	if reduceMotion() then return end
-	local holder = new("Attachment", { Position = Vector3.new(0, at.Size.Y / 2, 0) }, at)
-	local burst = new("ParticleEmitter", {
-		Rate = 0, Speed = NumberRange.new(8, 14), Lifetime = NumberRange.new(0.5, 0.9), SpreadAngle = Vector2.new(70, 70),
-		LightEmission = 1, Color = ColorSequence.new(Color3.fromRGB(255, 205, 60)),
-		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(1, 0) }),
-	}, holder)
-	burst:Emit(30)
-	Debris:AddItem(holder, 1.5)
-end
-
 -- Fixed pool: bursts and auto-collect never allocate more than six billboards.
 type CashPopup = { board: BillboardGui, label: TextLabel, token: number }
 local popupPool: { CashPopup } = {}
@@ -963,15 +950,8 @@ local function popUp(text: string)
 end
 
 remotes:WaitForChild("Effect").OnClientEvent:Connect(function(kind: string, arg: any)
-	local plot = myPlot()
 	if kind == "banked" then
 		popUp("+" .. money(arg))
-	elseif kind == "bought" and plot then
-		local items = plot:FindFirstChild("Items")
-		local spot = items and items:FindFirstChild(arg) or plot:FindFirstChild("Buy_" .. arg)
-		if spot and spot:IsA("BasePart") then
-			sparks(spot)
-		end
 	end
 end)
 
