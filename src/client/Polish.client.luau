@@ -1,5 +1,5 @@
 --!strict
--- Pit Lane Tycoon polish: music, sound effects, the settings panel (music and sounds on or
+-- Pit Lane Tycoon polish: world bursts, music, sound effects, the settings panel (music and sounds on or
 -- off, kept with the player's save) and how buttons feel: they grow under the pointer, dip
 -- when pressed and click. Every sound comes from a Roblox-licensed library (Config.Audio).
 
@@ -11,6 +11,7 @@ local TweenService = game:GetService("TweenService")
 local Layout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Layout"))
 local Icons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Icons"))
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Bursts = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("BurstPool"))
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
 local player = Players.LocalPlayer
 
@@ -93,6 +94,119 @@ remotes:WaitForChild("Effect").OnClientEvent:Connect(function(kind: string)
 	elseif kind == "built" then
 		build:Play()
 	end
+end)
+
+-- World feedback: six reusable emitters/highlights, attached to Terrain so plot rebuilds
+-- cannot destroy the pool. No extra Parts, asset textures, or particle queues.
+type Burst = { holder: Attachment, emitter: ParticleEmitter, glow: Highlight, tween: Tween? }
+local leases = Bursts.new()
+local bursts: { Burst } = {}
+local feedback = Instance.new("Folder")
+feedback.Name = "PitLaneFeedback"
+feedback.Parent = workspace
+for _ = 1, Bursts.SlotLimit do
+	local holder = Instance.new("Attachment")
+	holder.Name = "FeedbackBurst"
+	holder.Parent = workspace.Terrain
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Enabled = false
+	emitter.Rate = 0
+	emitter.LightEmission = 1
+	emitter.LightInfluence = 0
+	emitter.LockedToPart = false
+	emitter.Parent = holder -- keep the built-in default texture
+	local glow = Instance.new("Highlight")
+	glow.Enabled = false
+	glow.DepthMode = Enum.HighlightDepthMode.Occluded
+	glow.Parent = feedback
+	table.insert(bursts, { holder = holder, emitter = emitter, glow = glow })
+end
+local function resetBurst(entry: Burst)
+	entry.emitter:Clear()
+	if entry.tween then entry.tween:Cancel(); entry.tween = nil end
+	entry.glow.Enabled = false
+	entry.glow.Adornee = nil
+end
+local function clearBursts()
+	Bursts.clear(leases)
+	for _, entry in bursts do resetBurst(entry) end
+end
+player:GetAttributeChangedSignal("ReduceMotion"):Connect(function()
+	if player:GetAttribute("ReduceMotion") == true then clearBursts() end
+end)
+player.CharacterRemoving:Connect(clearBursts)
+
+local rainbow = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 75, 90)),
+	ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 200, 50)),
+	ColorSequenceKeypoint.new(0.4, Color3.fromRGB(75, 235, 120)),
+	ColorSequenceKeypoint.new(0.6, Color3.fromRGB(65, 175, 255)),
+	ColorSequenceKeypoint.new(0.8, Color3.fromRGB(170, 90, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 215)),
+})
+local gold = Color3.fromRGB(255, 205, 60)
+
+local function glowSlot(index: number, token: number, tier: string, count: number, attempt: number)
+	if leases.slots[index].token ~= token or leases.slots[index].expiresAt <= os.clock() then return end
+	local plots = workspace:FindFirstChild("Plots")
+	local plot = plots and plots:FindFirstChild("Plot" .. tostring(player:GetAttribute("Plot") or 0))
+	local items = plot and plot:FindFirstChild("Items")
+	local shelf = items and items:FindFirstChild("Shelf")
+	local slot = shelf and shelf:FindFirstChild(tier .. "Slot" .. count)
+	-- The effect remote can arrive before the replacement cabinet replicates.
+	if not shelf or (shelf:GetAttribute(tier) or 0) < count or not slot then
+		if attempt < 12 then task.delay(0.05, glowSlot, index, token, tier, count, attempt + 1) end
+		return
+	end
+	local entry = bursts[index]
+	entry.glow.Adornee = slot
+	entry.glow.FillColor = if tier == "Gold" then gold else Color3.fromRGB(225, 100, 255)
+	entry.glow.OutlineColor = entry.glow.FillColor
+	entry.glow.FillTransparency, entry.glow.OutlineTransparency = 0.15, 0
+	entry.glow.Enabled = true
+	local tween = TweenService:Create(entry.glow, TweenInfo.new(0.65), { FillTransparency = 1, OutlineTransparency = 1 })
+	entry.tween = tween
+	tween:Play()
+end
+
+remotes:WaitForChild("Effect").OnClientEvent:Connect(function(kind: string, arg: any, position: Vector3?, colour: Color3?)
+	local profileKind: string
+	if kind == "bought" or kind == "built" then profileKind = "purchase"
+	elseif kind == "season" then profileKind = "season"
+	elseif kind == "rare" and type(arg) == "table" and (arg.tier == "Gold" or arg.tier == "Rainbow") then
+		profileKind = if arg.tier == "Gold" then "gold" else "rainbow"
+	else return end
+	if typeof(position) ~= "Vector3" or typeof(colour) ~= "Color3" then return end
+	local index, token = Bursts.acquire(leases, profileKind, os.clock(), player:GetAttribute("ReduceMotion") == true)
+	if not index or not token then return end
+	local profile = Bursts.Profiles[profileKind]
+	local entry = bursts[index]
+	resetBurst(entry)
+	entry.holder.WorldCFrame = CFrame.new(position)
+	local emitter = entry.emitter
+	local confetti = profileKind == "season"
+	local rare = profileKind == "gold" or profileKind == "rainbow"
+	emitter.Color = if confetti or profileKind == "rainbow" then rainbow
+		elseif profileKind == "gold" then ColorSequence.new(gold) else ColorSequence.new(colour)
+	emitter.Lifetime = NumberRange.new(profile.duration * 0.65, profile.duration)
+	emitter.Speed = if confetti then NumberRange.new(12, 22) elseif rare then NumberRange.new(3, 8) else NumberRange.new(8, 14)
+	emitter.SpreadAngle = if confetti then Vector2.new(100, 100) else Vector2.new(70, 70)
+	emitter.Acceleration = Vector3.new(0, if confetti then -18 else -8, 0)
+	emitter.Drag = if confetti then 1.5 else 0
+	emitter.Rotation = NumberRange.new(0, 360)
+	emitter.RotSpeed = NumberRange.new(-150, 150)
+	emitter.Squash = NumberSequence.new(if confetti then 1.4 else 0)
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, if confetti then 0.5 elseif rare then 0.35 else 0.6),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	emitter:Emit(profile.count)
+	if kind == "rare" and type(arg.count) == "number" and arg.count >= 1 and arg.count <= 6 then
+		glowSlot(index, token, arg.tier, arg.count, 0)
+	end
+	task.delay(profile.duration, function()
+		if Bursts.release(leases, index, token) then resetBurst(entry) end
+	end)
 end)
 
 -- buttons: grow under the pointer, dip when pressed, click ---------------------------

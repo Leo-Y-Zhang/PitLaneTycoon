@@ -587,9 +587,10 @@ local function refreshGarage(plot, st: State?, animate: boolean?)
 		if up[piece.name] and not have then
 			local model = Scenery.garagePiece(piece.name, plot.garage, plot.cf, plot.team, theme)
 			if animate then
+				local centre = model:GetBoundingBox()
 				rise(model)
 				if plot.owner then
-					effect:FireClient(plot.owner, "built", piece.name)
+					effect:FireClient(plot.owner, "built", piece.name, centre.Position, plot.team.colour)
 				end
 			end
 		elseif have and not up[piece.name] then
@@ -718,7 +719,11 @@ local function tryBuy(player: Player, index: number)
 	refreshPads(player)
 	publish(player)
 	notify:FireClient(player, "Bought " .. item.name)
-	effect:FireClient(player, "bought", item.key)
+	local spot = st.plot.items:FindFirstChild(item.key)
+		or (item.kind == "trophy" and st.plot.items:FindFirstChild("Trophy")) or st.plot.conveyor
+	local position = if spot and spot:IsA("BasePart") then spot.Position + Vector3.new(0, spot.Size.Y / 2, 0)
+		else at(st.plot, 0, 5, 0).Position
+	effect:FireClient(player, "bought", item.key, position, st.plot.team.colour)
 	refreshGarage(st.plot, st, true)
 	local piece = GaragePlan.newPiece(Config.GaragePieces, purchasesOf(st), st.data.season)
 	if piece then
@@ -827,6 +832,10 @@ local function makePlot(index: number)
 			st.data.rares[rare] = (st.data.rares[rare] or 0) + 1
 			st.dirty = true
 			refreshShelf(plot, st)
+			if rare == "Gold" or rare == "Rainbow" then
+				effect:FireClient(plot.owner, "rare", { tier = rare, count = st.data.rares[rare] },
+					collector.Position + Vector3.new(0, 2, 0), plot.team.colour)
+			end
 		end
 		if rare == "Rainbow" then -- the whole server hears about a Rainbow
 			notify:FireAllClients(("%s stamped a RAINBOW part! +%s"):format(plot.team.name, money(value)))
@@ -1041,8 +1050,9 @@ newSeason.OnServerEvent:Connect(function(player)
 	st.dirty = true
 	rebuildPlot(player)
 	publish(player)
-	save(player)
 	notify:FireClient(player, ("Season %d! Earnings now x%.1f"):format(st.data.season + 1, multiplier(st)))
+	effect:FireClient(player, "season", st.data.season, at(st.plot, 0, 18, 4).Position, st.plot.team.colour)
+	save(player)
 	st.data.funnel = Analytics.funnel(player, st.data.funnel, Analytics.Step.newSeason)
 	checkGoals(player)
 end)
