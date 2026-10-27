@@ -490,16 +490,19 @@ if RunService:IsClient() then
 		end, 10)
 		local goal = hud:FindFirstChild("GoalPanel") :: Frame?
 		local trackerView = workspace.CurrentCamera.ViewportSize
+		local trackerLayout = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Layout"))
+		local trackerInset = game:GetService("GuiService"):GetGuiInset()
 		local inputs = game:GetService("UserInputService")
 		local trackerPhone = inputs.TouchEnabled and not inputs.KeyboardEnabled
 		local right = tracker and tracker.AbsolutePosition.X + tracker.AbsoluteSize.X or 0
 		local bottom = tracker and tracker.AbsolutePosition.Y + tracker.AbsoluteSize.Y or 0
-		clientCheck("the step 1 tracker is visible and clear of the goal, thumbstick and player list",
+		clientCheck("the step 1 tracker is visible at the right edge and clear of the goal, touch corners and player list",
 			ready and tracker and goal and goal.Visible and tracker.AbsoluteSize.X > 0
 				and tracker.AbsolutePosition.Y >= goal.AbsolutePosition.Y + goal.AbsoluteSize.Y
 				and tracker.AbsolutePosition.X >= 0 and right <= trackerView.X and bottom <= trackerView.Y
-				and (bottom <= trackerView.Y * 0.62 or tracker.AbsolutePosition.X >= trackerView.X * 0.3)
-				and (trackerPhone or right <= trackerView.X - 320),
+				and math.abs(right - (trackerView.X - 12)) <= 1
+				and (not trackerPhone or bottom <= trackerView.Y * 0.62)
+				and (trackerPhone or goal.AbsolutePosition.Y >= trackerInset.Y + trackerLayout.PlayerListHeight + 8),
 			("right edge %d of %d, bottom %d of %d"):format(right, trackerView.X, bottom, trackerView.Y))
 		if ready then
 			print(TAG, "SHOT tracker") -- run.py saves tracker.png alongside studio-play.png

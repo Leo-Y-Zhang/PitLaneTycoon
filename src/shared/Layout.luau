@@ -9,6 +9,8 @@ Layout.TopBarHeight = 122
 -- Roblox's player list, top right on a computer: about 315 px with Seasons and Cash
 -- (measured in Studio on 25 Oct 2026)
 Layout.PlayerListWidth = 330
+-- Reserve 200 px below the top safe inset for the desktop list and its rows.
+Layout.PlayerListHeight = 200
 Layout.SettingsPanelTop = 62
 Layout.SettingsPanelHeight = 154
 Layout.SettingsWidth = 56 -- the settings button, top left
@@ -103,14 +105,19 @@ export type TrackerPlacement = { x: number, y: number, scale: number, visible: b
 function Layout.tracker(width: number, height: number, insetTop: number, insetBottom: number,
 	touch: boolean, preferredTop: number, obstacles: { Rect }, panelOpen: boolean): TrackerPlacement
 	local s = Layout.scale(width, height)
-	local right = width - 12 - (if touch then 0 else Layout.PlayerListWidth)
+	local right = width - 12
 	local left = right - Layout.GoalWidth * s
 	local limit = math.min(height - insetBottom, if touch then height * 0.62 else height)
 	local maxY = limit - insetTop - Layout.TrackerStackHeight * s - 8
 	local y = math.max(8, math.min(preferredTop, maxY))
-	for _ = 1, #obstacles + 1 do
+	local blockers = table.clone(obstacles)
+	if not touch then
+		table.insert(blockers, { left = width - Layout.PlayerListWidth, right = width,
+			top = insetTop, bottom = insetTop + Layout.PlayerListHeight })
+	end
+	for _ = 1, #blockers + 1 do
 		local moved = false
-		for _, rect in obstacles do
+		for _, rect in blockers do
 			if left < rect.right + 8 and right > rect.left - 8
 				and insetTop + y < rect.bottom + 8 and insetTop + y + Layout.TrackerStackHeight * s > rect.top - 8 then
 				y = rect.bottom - insetTop + 8

@@ -79,7 +79,7 @@ for _, size in { { 320, 568 }, { 640, 360 }, { 667, 375 }, { 844, 390 }, { 1024,
 		local left, bottom = p.x - Layout.GoalWidth * p.scale, 60 + p.y + Layout.TrackerStackHeight * p.scale
 		check(tag .. " stays in safe area or hides", not p.visible or (left >= 8 and bottom <= h - 12))
 		check(tag .. " clears touch corners or hides", not p.visible or not touch or bottom <= h * 0.62)
-		check(tag .. " clears player list or hides", not p.visible or touch or p.x <= w - Layout.PlayerListWidth - 8)
+		check(tag .. " clears player list or hides", not p.visible or touch or 60 + p.y >= 60 + Layout.PlayerListHeight + 8)
 		local modal = Layout.tracker(w, h, 60, 12, touch, 100, {}, true)
 		check(tag .. " hides with any panel open", not modal.visible)
 		local covered = Layout.tracker(w, h, 60, 12, touch, 100, { { left = 0, top = 0, right = w, bottom = h } }, false)
@@ -89,8 +89,8 @@ end
 do
 	local p = Layout.tracker(844, 390, 60, 0, true, 150, {}, false)
 	check("landscape phone has room for both cards", p.visible)
-	local p2 = Layout.tracker(1920, 1080, 60, 0, false, 100, { { left = 1300, right = 1600, top = 0, bottom = 250 } }, false)
-	check("cards can move below an obstruction", p2.visible and p2.y >= 198)
+	local p2 = Layout.tracker(1920, 1080, 60, 0, false, 100, { { left = 1700, right = 1920, top = 0, bottom = 350 } }, false)
+	check("cards can move below an obstruction", p2.visible and p2.y >= 298)
 end
 do -- Include actual HUD lanes, rather than testing an otherwise empty screen.
 	for _, size in { { 667, 375 }, { 844, 390 }, { 1024, 768 }, { 1920, 1080 } } do
