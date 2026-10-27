@@ -63,7 +63,9 @@ Scenery.block = block
 Scenery.sign = sign
 
 -- Only actual lamp faces register; race lights, signs and machine indicators stay independent.
-local lamps = setmetatable({} :: { [BasePart]: boolean }, { __mode = "k" })
+-- A strong set: Roblox can drop Instance keys from a weak table while the part is still in the
+-- world, which left nothing to switch at dusk. The loop prunes lamps that leave the workspace.
+local lamps: { [BasePart]: boolean } = {}
 local function switchLamp(lamp: BasePart, night: boolean)
 	lamp.Material = if night then Enum.Material.Neon else Enum.Material.SmoothPlastic
 	for _, child in lamp:GetDescendants() do

@@ -71,7 +71,7 @@ def main() -> None:
     shots, out = Path(sys.argv[1]), Path(sys.argv[2])
     out.mkdir(parents=True, exist_ok=True)
     views = {}
-    for name in ("race", "hero", "car", "line", "paddock", "night"):
+    for name in ("race", "hero", "car", "line", "paddock", "night", "dusk"):
         vp = viewport(Image.open(shots / f"{name}.png"))
         views[name] = vp.crop((0, int(vp.height * 0.17), vp.width, vp.height))  # below the menu buttons
     titled(views["race"], (1280, 720), "PIT LANE TYCOON", "Drive your own F1 car").save(out / "thumbnail-1.png")
