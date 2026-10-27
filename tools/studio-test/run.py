@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 TAG = "[PLT-TEST]"
+PHOTO_SHOTS = ("hero", "car", "line", "paddock", "race", "track", "shelf", "crew", "night", "endurance", "dusk")
 HERE = Path(__file__).resolve().parent
 ROBLOX = Path(os.environ["LOCALAPPDATA"]) / "Roblox"
 PLUGIN = ROBLOX / "Plugins" / "PitLaneSmokeTest.lua"
@@ -109,6 +110,7 @@ def main() -> int:
     result = None
     studio = None
     client_fails = 0
+    captured = set()
     try:
         studio = subprocess.Popen([str(studio_exe()), str(place)])
         while time.time() - started < a.timeout and result is None:
@@ -132,6 +134,7 @@ def main() -> int:
                             a.shots.mkdir(parents=True, exist_ok=True)
                             name = text[4:].strip() or "studio-play"
                             screenshot(studio.pid, a.shots / f"{name}.png")
+                            captured.add(name)
     finally:
         PLUGIN.unlink(missing_ok=True)
         # close only the Studio window this run opened
@@ -144,10 +147,13 @@ def main() -> int:
     if not result.get("ok"):
         print("the play test could not start:", result.get("result"))
         return 2
+    missing = sorted(set(PHOTO_SHOTS) - captured) if a.photos else []
+    if missing:
+        print("missing photos:", ", ".join(missing))
     r = result["result"]
     print(f"\n{r['passed']}/{r['total']} checks passed, {client_fails} client checks failed, {r['errors']} errors"
           + (" (screen locked: client checks not meaningful)" if locked else ""))
-    return 0 if r["passed"] == r["total"] and not client_fails and not r["errors"] else 1
+    return 0 if r["passed"] == r["total"] and not client_fails and not r["errors"] and not missing else 1
 
 
 if __name__ == "__main__":

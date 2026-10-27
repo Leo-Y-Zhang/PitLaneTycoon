@@ -38,6 +38,22 @@ local function waitFor(fn: () -> any, timeout: number): any
 	return nil
 end
 
+-- A real tower light, rather than an always-on sign or a race start light.
+local function enabledPhotoLamp()
+	local paddock = workspace:FindFirstChild("Paddock")
+	local props = paddock and paddock:FindFirstChild("Props")
+	for _, tower in (props and props:GetChildren() or {}) do
+		if tower.Name == "tower" then
+			for _, light in tower:GetDescendants() do
+				if light:IsA("SurfaceLight") and light.Enabled then
+					return light
+				end
+			end
+		end
+	end
+	return nil
+end
+
 if not isPitLane() then
 	return
 end
@@ -346,6 +362,32 @@ local function photoShoot()
 			local at = Vector3.new(x, 1.1, z)
 			car:PivotTo(CFrame.lookAt(at, at + Vector3.new(dx, 0, dz)))
 		end
+	end
+	-- Last photo: the server must change the frozen clock so its lamp loop sees dusk.
+	local photoStep = game:GetService("ReplicatedStorage"):WaitForChild("PhotoStep", 10)
+	local lighting = game:GetService("Lighting")
+	local previousClock = lighting.ClockTime
+	local duskOk, duskError = pcall(function()
+		assert(photoStep, "photo server handoff missing")
+		assert(photoStep:InvokeServer("dusk"), "server did not enable a dusk lamp")
+		assert(waitFor(enabledPhotoLamp, 10), "dusk lamp did not replicate to the client")
+		-- Mirror the server's time for rendering too (ClockTime is not replicated).
+		lighting.ClockTime = 20.5
+		cam.CameraType = Enum.CameraType.Scriptable
+		cam.FieldOfView = 65
+		-- The paddock view includes towers in front, our garage, and the track beyond its roof.
+		cam.CFrame = CFrame.lookAt((base * CFrame.new(0, 48, -100)).Position, (base * CFrame.new(0, 2, -10)).Position)
+		hideGuis()
+		task.wait(1.5)
+		print(TAG, "SHOT dusk")
+		task.wait(2.5) -- run.py polls the log every two seconds; hold before restoring
+	end)
+	lighting.ClockTime = previousClock
+	if photoStep then
+		photoStep:InvokeServer("done", duskOk)
+	end
+	if not duskOk then
+		print(TAG, "CLIENT-FAIL dusk photo (" .. tostring(duskError) .. ")")
 	end
 	print(TAG, "PHOTOS-DONE")
 end
@@ -708,6 +750,38 @@ LogService.MessageOut:Connect(function(message, kind)
 end)
 
 if SCENARIO == "photo" then
+	-- This handoff exists only in the test plugin's photo server, never in gameplay.
+	local lighting = game:GetService("Lighting")
+	local previousClock = nil
+	local photosDone = false
+	local function restoreClock()
+		if previousClock ~= nil then
+			lighting.ClockTime = previousClock
+			previousClock = nil
+		end
+	end
+	local photoStep = Instance.new("RemoteFunction")
+	photoStep.Name = "PhotoStep"
+	photoStep.OnServerInvoke = function(_, step, success)
+		if workspace:GetAttribute("PhotoMode") ~= true then
+			return false
+		end
+		if step == "dusk" and previousClock == nil and not photosDone then
+			previousClock = lighting.ClockTime
+			lighting.ClockTime = 20.5
+			-- Scenery.updateLamps still runs every 0.5 s while PhotoMode freezes advancement.
+			return waitFor(enabledPhotoLamp, 10) ~= nil
+		elseif step == "done" then
+			restoreClock()
+			if not success then
+				table.insert(errors, "the dusk photo failed")
+			end
+			photosDone = true
+			return true
+		end
+		return false
+	end
+	photoStep.Parent = game:GetService("ReplicatedStorage")
 	-- the client takes the pictures; the server keeps the session open long enough, checks
 	-- that a garage with every machine earns what the HUD says it earns, and reports any
 	-- error from building every machine at once
@@ -771,6 +845,12 @@ if SCENARIO == "photo" then
 		print(TAG, ("PERF one full garage: server step %.1f ms (worst %.1f), physics %.0f fps, %d parts in the world, %d on the line"):format(
 			perf.step * 1000, perf.worst * 1000, perf.fps, perf.parts, perf.drops))
 		local passed = (ok and 1 or 0) + (timed and 1 or 0) + (apart and 1 or 0) + (longTimed and 1 or 0)
+		-- The final lap can finish before the dusk handoff. Keep the test alive for capture.
+		if not waitFor(function() return photosDone end, 40) then
+			table.insert(errors, "the client did not finish the dusk photo")
+		end
+		restoreClock() -- also restore if the client failed or disconnected during the shot
+		photoStep:Destroy()
 		StudioTestService:EndTest({ passed = passed, total = 4, errors = errors, warnings = warnings })
 	end)
 	return
