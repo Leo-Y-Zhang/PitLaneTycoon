@@ -151,8 +151,8 @@ before applying.
   panel shows km/h. From season 2 the **Reverse GP** opens: the same circuit the other way
   round (Race asks which), with its own best laps and its own board at the spawn. From season 3
   the **Endurance** circuit joins them: a 2 km loop round the outside of the Grand Prix track,
-  with its own gantry, best laps and board. Put "drive your own F1
-  car" in the description and a car on the track in a thumbnail.
+  with its own gantry, best laps and board. Put "drive your own race
+  car" in the description (never "F1": it is a trademark) and a car on the track in a thumbnail.
 
 ## Saving across servers
 
