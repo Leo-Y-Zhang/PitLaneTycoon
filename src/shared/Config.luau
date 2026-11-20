@@ -180,7 +180,7 @@ Config.DailyRewards = {
 -- (at least `floor` times the season multiplier) when met. Kinds: banks, purchases (this
 -- season), laps (clean), earned (factory, all seasons), lapUnder (n = seconds), trophy,
 -- season (n = new seasons started), crew (n = members hired). tests/Goals.spec.luau checks
--- they can all be met.
+-- they can all be met. endurance = a clean lap recorded on the Endurance circuit.
 Config.Goals = {
 	{ kind = "banks", n = 1, text = "Bank your first cash", minutes = 1, floor = 30 },
 	{ kind = "purchases", n = 2, text = "Buy 2 machines", minutes = 2, floor = 60 },
@@ -199,6 +199,8 @@ Config.Goals = {
 	{ kind = "season", n = 2, text = "Start season 3", minutes = 10, floor = 2000 },
 	{ kind = "lapUnder", n = 18, text = "Lap in under 0:18", minutes = 10, floor = 2000 },
 	{ kind = "season", n = 3, text = "Start season 4", minutes = 12, floor = 2000 },
+	-- Append new goals so saved goal indices keep their meaning.
+	{ kind = "endurance", n = 1, text = "Complete an Endurance lap", minutes = 12, floor = 2000 },
 } :: { { kind: string, n: number, text: string, minutes: number, floor: number } }
 
 -- A gift for staying: every `everyMinutes` played this visit, one claimable gift of

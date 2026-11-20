@@ -634,29 +634,34 @@ if RunService:IsClient() then
 		local engineSound = game:GetService("SoundService"):FindFirstChild("PitLane_engine") :: Sound?
 		clientCheck("the engine runs", engineSound and engineSound.IsLoaded and engineSound.IsPlaying)
 
-		-- hold the brake (it reverses) for three seconds. Through the seat's TestThrottle: Roblox's
-		-- own controls rewrite ThrottleFloat every frame, so a value written there can be lost
+		-- TestThrottle survives Roblox's controls rewriting ThrottleFloat. Input/GO alone
+		-- does not mean physics has moved the car or the Heartbeat HUD has refreshed yet.
 		local speedLabel = frame and frame:FindFirstChild("Speed") :: TextLabel?
 		local chassis = car.PrimaryPart :: BasePart
 		local driveForce = chassis:FindFirstChild("Drive") :: LinearVelocity?
-		local fastest = 0 -- the highest reading while reversing
-		local trace, nextTrace = {}, 0 -- what the car did every half second, shown on a failure
+		local function measuredSpeed(): number
+			local look = chassis.CFrame.LookVector
+			local forward = Vector3.new(look.X, 0, look.Z).Unit
+			local v = chassis.AssemblyLinearVelocity
+			return math.abs(Vector3.new(v.X, 0, v.Z):Dot(forward))
+		end
+		local started = os.clock()
 		seat:SetAttribute("TestThrottle", -1)
-		local watch = RunService.Heartbeat:Connect(function()
-			local reading = speedLabel and tonumber(string.match(speedLabel.Text, "^(%d+) km/h$"))
-			fastest = math.max(fastest, reading or 0)
-			if os.clock() >= nextTrace then
-				nextTrace = os.clock() + 0.5
-				local pv = driveForce and driveForce.PlaneVelocity or Vector2.zero
-				table.insert(trace, ("v=%.2f force=%.2f clock=%s"):format(chassis.AssemblyLinearVelocity.Magnitude,
-					pv.Magnitude, clockLabel and clockLabel.Text or "?"))
-			end
-		end)
-		task.wait(3)
-		watch:Disconnect()
+		local moving = waitFor(function()
+			return measuredSpeed() > 3 -- studs/s, independent of the HUD
+		end, 3)
+		-- Read after a render boundary so the driving script's Heartbeat can update the text.
+		RunService.RenderStepped:Wait()
+		local measured = measuredSpeed()
+		local reading = speedLabel and tonumber(string.match(speedLabel.Text, "^(%d+) km/h$"))
+		local expected = measured * 3.6 -- the game treats one stud as one metre
+		local pv = driveForce and driveForce.PlaneVelocity or Vector2.zero
+		clientCheck("the speed shows in km/h", moving and measured > 3 and reading ~= nil and math.abs(reading - expected) <= 2,
+			("HUD=%s, measured=%.2f studs/s, expected=%.2f km/h (tolerance 2), force=%.2f"):format(
+				tostring(reading), measured, expected, pv.Magnitude))
+		-- Keep the full pedal interval for the server's separate displacement check.
+		task.wait(math.max(0, 3 - (os.clock() - started)))
 		seat:SetAttribute("TestThrottle", nil)
-		clientCheck("the speed shows in km/h", fastest > 10, ("up to %d km/h"):format(fastest)
-			.. (if fastest > 10 then "" else " | " .. table.concat(trace, " ; ")))
 
 		local function place(a: number, off: number)
 			local x, z = TrackShape.point(Config.Track, a)

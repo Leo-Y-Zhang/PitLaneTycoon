@@ -11,12 +11,13 @@ export type Stats = {
 	laps: number, -- clean laps
 	earned: number, -- factory earnings, all seasons
 	bestLap: number, -- seconds, 0 = none
+	bestLapLong: number, -- Endurance seconds, 0 = no clean lap
 	season: number, -- 0 = the first
 	trophy: boolean, -- the Constructors' trophy bought this season
 	crew: number, -- crew members hired, all seasons
 }
 
-Goals.Kinds = { "banks", "purchases", "laps", "earned", "lapUnder", "trophy", "season", "crew" }
+Goals.Kinds = { "banks", "purchases", "laps", "earned", "lapUnder", "trophy", "season", "crew", "endurance" }
 
 -- how far along a goal is, and what it needs
 function Goals.progress(goal: Goal, s: Stats): (number, number)
@@ -26,6 +27,8 @@ function Goals.progress(goal: Goal, s: Stats): (number, number)
 		return math.min(s.purchases, goal.n), goal.n
 	elseif goal.kind == "laps" then
 		return math.min(s.laps, goal.n), goal.n
+	elseif goal.kind == "endurance" then
+		return if s.bestLapLong > 0 then 1 else 0, 1
 	elseif goal.kind == "earned" then
 		return math.min(s.earned, goal.n), goal.n
 	elseif goal.kind == "lapUnder" then -- n = seconds

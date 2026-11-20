@@ -332,7 +332,7 @@ local function goalStats(st: State): Goals.Stats
 	return {
 		banks = st.data.banks, purchases = purchasesOf(st), laps = st.data.laps, earned = st.data.earned,
 		bestLap = st.data.bestLap, season = st.data.season, trophy = st.data.bought.trophy == true,
-		crew = crewHired(st),
+		crew = crewHired(st), bestLapLong = st.data.bestLapLong,
 	}
 end
 
