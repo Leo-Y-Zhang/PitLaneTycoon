@@ -53,6 +53,8 @@ do
 			reachable, why = false, goal.text
 		elseif goal.kind == "crew" and mostBought < Config.Crew.unlockPurchases and lastSeason == 0 then
 			reachable, why = false, goal.text .. " comes before the crew unlocks"
+		elseif goal.kind == "endurance" and season < Config.LongTrack.fromSeason then
+			reachable, why = false, goal.text .. " comes before Endurance unlocks"
 		elseif goal.kind == "lapUnder" then
 			local top = math.min(Config.Drive.maxTopSpeed, Config.Drive.topSpeed + Config.Drive.perSeason * season)
 			if goal.n < length / top * 1.1 then -- a flat-out lap plus some room for the bends
@@ -71,7 +73,7 @@ do
 end
 
 do
-	local s = { banks = 0, purchases = 3, laps = 0, earned = 0, bestLap = 0, season = 0, trophy = false, crew = 0 }
+	local s = { banks = 0, purchases = 3, laps = 0, earned = 0, bestLap = 0, bestLapLong = 0, season = 0, trophy = false, crew = 0 }
 	local function goal(kind: string, n: number)
 		return { kind = kind, n = n, text = "", minutes = 1, floor = 1 }
 	end
@@ -86,6 +88,22 @@ do
 	s.season = 1
 	check("and stays met in later seasons, when the trophy is gone", Goals.done(goal("trophy", 1), s))
 	check("a crew goal waits for a hire", not Goals.done(goal("crew", 1), s))
+	local endurance: Goals.Goal? = nil
+	for _, configured in Config.Goals do
+		if configured.kind == "endurance" then endurance = configured end
+	end
+	check("the chain includes an Endurance lap goal", endurance ~= nil)
+	if endurance then
+		s.laps = 10
+		check("GP laps and seasons alone do not meet Endurance", not Goals.done(endurance, s))
+		local before, target = Goals.progress(endurance, s)
+		check("Endurance waits for its first clean lap", before == 0 and target == 1)
+		s.bestLapLong = 45.5 -- the existing long-layout lapDone event records this
+		check("a recorded Endurance lap meets the goal", Goals.done(endurance, s))
+		s.season = 5
+		check("an earlier Endurance lap still counts in later seasons", Goals.done(endurance, s))
+	end
+
 	s.crew = 2
 	check("and counts every member hired", Goals.done(goal("crew", 1), s) and (Goals.progress(goal("crew", 3), s)) == 2)
 end
